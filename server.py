@@ -724,7 +724,9 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 if colunas:
                     print("🔍 Estrutura da tabela PEDIDOS:")
                     for col in colunas:
-                        print(f"   - {col['COLUMN_NAME']} ({col['DATA_TYPE']})")
+                        print(f"   - {col['COLUMN_NAME']} ({col['DATA_TYPE']}) - Default: {col.get('COLUMN_DEFAULT', 'N/A')}")
+                else:
+                    print("⚠️ Não foi possível obter estrutura da tabela")
                 
                 # Query COMPLETA com todos os campos disponíveis + APROVADO_POR + FECHAMENTO
                 query = """
