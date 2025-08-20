@@ -1,0 +1,19 @@
+{
+  "name": "Sistema de Pedidos de Refeições",
+  "short_name": "Refeições",
+  "description": "Sistema para pedidos de refeições com funcionalidade offline",
+  "start_url": "./sistema-pedidos.html",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='m12 3-1.912 5.813a2 2 0 0 1-1.295 1.295L3 12l5.813 1.912a2 2 0 0 1 1.295 1.295L12 21l1.912-5.813a2 2 0 0 1 1.295-1.295L21 12l-5.813-1.912a2 2 0 0 1-1.295-1.295L12 3z'/%3e%3c/svg%3e",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ],
+  "scope": "/",
+  "prefer_related_applications": false
+}
