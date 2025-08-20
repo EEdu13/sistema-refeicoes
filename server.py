@@ -659,10 +659,51 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         
         if path == '/api/salvar-pedido':
-            # Ler dados do POST
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            pedido_data = json.loads(post_data.decode('utf-8'))
+            # Ler dados do POST com validação
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                print(f"📏 Content-Length: {content_length}")
+                
+                if content_length == 0:
+                    print("❌ Erro: Content-Length é 0")
+                    response = {"error": True, "message": "Dados vazios recebidos"}
+                    self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+                    return
+                
+                post_data = self.rfile.read(content_length)
+                print(f"📦 Dados brutos recebidos ({len(post_data)} bytes): {post_data[:200]}...")
+                
+                if not post_data:
+                    print("❌ Erro: post_data está vazio")
+                    response = {"error": True, "message": "Nenhum dado recebido"}
+                    self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+                    return
+                
+                # Decodificar dados
+                post_data_str = post_data.decode('utf-8')
+                print(f"📝 String decodificada: {post_data_str[:200]}...")
+                
+                if not post_data_str.strip():
+                    print("❌ Erro: String decodificada está vazia")
+                    response = {"error": True, "message": "Dados decodificados estão vazios"}
+                    self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+                    return
+                
+                # Parse JSON
+                pedido_data = json.loads(post_data_str)
+                print(f"✅ JSON parsed com sucesso")
+                
+            except json.JSONDecodeError as e:
+                print(f"❌ Erro ao fazer parse do JSON: {e}")
+                print(f"❌ Dados problemáticos: {post_data}")
+                response = {"error": True, "message": f"Erro no formato JSON: {str(e)}"}
+                self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+                return
+            except Exception as e:
+                print(f"❌ Erro geral no processamento: {e}")
+                response = {"error": True, "message": f"Erro no servidor: {str(e)}"}
+                self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+                return
             
             try:
                 print(f"📋 Dados do pedido: {pedido_data}")
