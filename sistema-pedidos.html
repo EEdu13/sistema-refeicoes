@@ -6010,7 +6010,25 @@ var templateParams = {
         // Função para salvar pedidos no banco de dados
         async function salvarPedidosNoBanco(dataRetirada, nomeLider, totalColaboradores) {
             console.log('💾 Iniciando salvamento no banco...');
-            console.log(`🔍 DEBUG: selectedMeals tem ${selectedMeals.length} itens:`, selectedMeals);
+            console.log(`🔍 DEBUG CRÍTICO: selectedMeals =`, selectedMeals);
+            console.log(`🔍 DEBUG CRÍTICO: selectedMeals.length = ${selectedMeals.length}`);
+            
+            // VERIFICAR quais botões estão selecionados
+            const botoesSelecionados = document.querySelectorAll('.meal-btn.selected');
+            console.log(`🔍 DEBUG: Botões selecionados no DOM:`, Array.from(botoesSelecionados).map(btn => btn.textContent.trim()));
+            
+            // VERIFICAR se todas as refeições têm fornecedor selecionado
+            botoesSelecionados.forEach(btn => {
+                const mealType = btn.onclick.toString().match(/'([^']+)'/)?.[1];
+                const select = document.querySelector(`select[data-meal="${mealType}"]`);
+                console.log(`🔍 DEBUG: ${mealType} - fornecedor selecionado: ${select?.value || 'NENHUM'}`);
+            });
+            
+            if (selectedMeals.length === 0) {
+                console.error('❌ ERRO CRÍTICO: selectedMeals está vazio!');
+                alert('Erro: Nenhuma refeição foi selecionada corretamente. Tente selecionar as refeições novamente.');
+                return;
+            }
             
             for (var i = 0; i < selectedMeals.length; i++) {
                 const mealType = selectedMeals[i];
