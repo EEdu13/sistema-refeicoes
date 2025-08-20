@@ -2714,10 +2714,37 @@
             
             // ===== SALVAR NO BANCO DE DADOS =====
             console.log('💾 Salvando pedidos no banco de dados...');
-            await salvarPedidosNoBanco(withdrawalDate, requestorName, totalParticipants);
             
-            // Mostrar popup de sucesso com opção WhatsApp
-            showSuccessPopup(hasMarmitex);
+            // Mostrar loading durante o envio
+            const submitBtn = document.querySelector('button[onclick="doSubmitOrder()"]');
+            const originalText = submitBtn ? submitBtn.innerHTML : '';
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '⏳ Salvando refeições...';
+            }
+            
+            try {
+                await salvarPedidosNoBanco(withdrawalDate, requestorName, totalParticipants);
+                
+                // Restaurar botão
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText || 'Finalizar Pedido';
+                }
+                
+                // Mostrar popup de sucesso com opção WhatsApp
+                showSuccessPopup(hasMarmitex);
+            } catch (error) {
+                console.error("❌ Erro ao salvar pedidos:", error);
+                
+                // Restaurar botão em caso de erro
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText || 'Finalizar Pedido';
+                }
+                
+                alert("Erro ao salvar pedidos. Tente novamente.");
+            }
         }
 
         async function loadPendingTemperatures() {
