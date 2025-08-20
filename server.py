@@ -689,7 +689,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     FORNECEDOR, VALOR_PAGO, COLABORADORES, TOTAL_COLABORADORES, A_CONTRATAR,
                     RESPONSAVEL_PELO_CARTAO, PAGCORP, HOSPEDADO, NOME_DO_HOTEL, VALOR_DIARIA,
                     TOTAL_PAGAR, APROVADO_POR, OBSERVACOES, FECHAMENTO
-                ) VALUES (?, GETDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (%s, GETDATE(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 
                 # Extrair TODOS os dados do pedido com MAPEAMENTO CORRETO
