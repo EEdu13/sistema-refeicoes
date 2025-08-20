@@ -35,7 +35,7 @@ AZURE_CONFIG = {
     'database': os.getenv('AZURE_SQL_DATABASE'),
     'username': os.getenv('AZURE_SQL_USERNAME'),
     'password': os.getenv('AZURE_SQL_PASSWORD'),
-    'driver': '{ODBC Driver 17 for SQL Server}'
+    'driver': '{ODBC Driver 18 for SQL Server}'
 }
 
 # Configuração do Azure Blob Storage
