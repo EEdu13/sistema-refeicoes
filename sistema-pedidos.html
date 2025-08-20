@@ -2559,7 +2559,7 @@
             return 0;
         }
 
-        function doSubmitOrder() {
+        async function doSubmitOrder() {
             if (selectedMeals.length === 0 || (selectedEmployees.length === 0 && otherParticipants.length === 0)) {
                 alert('Selecione pelo menos um tipo de refeição e pelo menos um colaborador ou adicione outros participantes!');
                 return;
@@ -2714,7 +2714,7 @@
             
             // ===== SALVAR NO BANCO DE DADOS =====
             console.log('💾 Salvando pedidos no banco de dados...');
-            salvarPedidosNoBanco(withdrawalDate, requestorName, totalParticipants);
+            await salvarPedidosNoBanco(withdrawalDate, requestorName, totalParticipants);
             
             // Mostrar popup de sucesso com opção WhatsApp
             showSuccessPopup(hasMarmitex);
