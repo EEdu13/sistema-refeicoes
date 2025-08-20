@@ -5,7 +5,7 @@ import json
 import urllib.parse
 from datetime import datetime
 import pytz
-import pyodbc
+import pymssql
 import decimal
 import os
 from dotenv import load_dotenv
@@ -34,8 +34,7 @@ AZURE_CONFIG = {
     'server': os.getenv('AZURE_SQL_SERVER'),
     'database': os.getenv('AZURE_SQL_DATABASE'),
     'username': os.getenv('AZURE_SQL_USERNAME'),
-    'password': os.getenv('AZURE_SQL_PASSWORD'),
-    'driver': '{ODBC Driver 18 for SQL Server}'
+    'password': os.getenv('AZURE_SQL_PASSWORD')
 }
 
 # Configuração do Azure Blob Storage
@@ -48,8 +47,13 @@ AZURE_BLOB_CONFIG = {
 def conectar_azure_sql():
     """Conecta ao Azure SQL Server"""
     try:
-        connection_string = f"DRIVER={AZURE_CONFIG['driver']};SERVER={AZURE_CONFIG['server']};DATABASE={AZURE_CONFIG['database']};UID={AZURE_CONFIG['username']};PWD={AZURE_CONFIG['password']}"
-        conn = pyodbc.connect(connection_string)
+        # Usando pymssql em vez de pyodbc para melhor compatibilidade no Railway
+        conn = pymssql.connect(
+            server=AZURE_CONFIG['server'],
+            database=AZURE_CONFIG['database'],
+            user=AZURE_CONFIG['username'],
+            password=AZURE_CONFIG['password']
+        )
         return conn
     except Exception as e:
         print(f"❌ Erro ao conectar no Azure SQL: {e}")

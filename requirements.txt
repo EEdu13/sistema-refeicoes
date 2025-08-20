@@ -1,4 +1,4 @@
-pyodbc
+pymssql
 requests
 Flask
 Flask-CORS
