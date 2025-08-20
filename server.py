@@ -18,12 +18,16 @@ def decimal_default(obj):
     if isinstance(obj, decimal.Decimal):
         return float(obj)
     elif isinstance(obj, datetime):
-        # Converter para horário de Brasília se necessário
+        # Converter para horário de Brasília
+        brasilia_tz = pytz.timezone('America/Sao_Paulo')
         if obj.tzinfo is None:
-            # Se datetime não tem timezone, assumir UTC e converter para Brasília
+            # Se datetime não tem timezone, assumir que já está em UTC (Railway usa UTC)
+            # e converter para Brasília
             utc_tz = pytz.UTC
-            brasilia_tz = pytz.timezone('America/Sao_Paulo')
             obj = utc_tz.localize(obj).astimezone(brasilia_tz)
+        else:
+            # Se já tem timezone, converter para Brasília
+            obj = obj.astimezone(brasilia_tz)
         return obj.isoformat()
     elif hasattr(obj, '__str__'):
         return str(obj)
@@ -730,7 +734,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     FORNECEDOR, VALOR_PAGO, COLABORADORES, TOTAL_COLABORADORES, A_CONTRATAR,
                     RESPONSAVEL_PELO_CARTAO, PAGCORP, HOSPEDADO, NOME_DO_HOTEL, VALOR_DIARIA,
                     TOTAL_PAGAR, APROVADO_POR, OBSERVACOES, FECHAMENTO
-                ) VALUES (%s, GETDATE(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, DATEADD(hour, -3, GETUTCDATE()), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 
                 # Extrair TODOS os dados do pedido com MAPEAMENTO CORRETO
