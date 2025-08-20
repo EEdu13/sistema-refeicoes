@@ -280,7 +280,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                        ISNULL(FECHAMENTO, '') as FECHAMENTO,
                        ISNULL(LOCAL, '') as FAZENDA
                 FROM tb_fornecedores 
-                WHERE PROJETO = ? AND STATUS = 'ATIVO'
+                WHERE PROJETO = %s AND STATUS = 'ATIVO'
                 ORDER BY TIPO_FORN, FORNECEDOR
                 """
                 
@@ -317,7 +317,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 query = """
                 SELECT ID, PROJETO, EQUIPE, LIDER, COORDENADOR, SUPERVISOR 
                 FROM ORGANOGRAMA 
-                WHERE PROJETO = ?
+                WHERE PROJETO = %s
                 ORDER BY EQUIPE
                 """
                 
@@ -355,7 +355,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 query = """
                 SELECT ID, EQUIPE, NOME, FUNCAO, PROJETO, COORDENADOR, SUPERVISOR, CLASSE 
                 FROM COLABORADORES 
-                WHERE EQUIPE = ?
+                WHERE EQUIPE = %s
                 ORDER BY NOME
                 """
                 
@@ -392,7 +392,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
             
             try:
                 # Buscar dados reais na tabela PAGCORP_CAD
-                query = "SELECT ID, CONTA, CC, LIDER FROM PAGCORP_CAD WHERE LIDER = ?"
+                query = "SELECT ID, CONTA, CC, LIDER FROM PAGCORP_CAD WHERE LIDER = %s"
                 resultado = executar_query(query, [lider])
                 
                 if resultado and len(resultado) > 0:
@@ -442,7 +442,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 FROM PEDIDOS 
                 WHERE (TIPO_REFEICAO LIKE '%MARMITEX%' OR TIPO_REFEICAO LIKE '%MARMITA%')
                   AND (TEMP_RETIRADA IS NULL OR TEMP_CONSUMO IS NULL)
-                  AND LIDER = ?
+                  AND LIDER = %s
                 ORDER BY DATA_ENVIO1 DESC
                 """
                 query_params_db = [equipe_param]
@@ -573,8 +573,8 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                         TOTAL_COLABORADORES, A_CONTRATAR, 
                         PAGCORP, HOSPEDADO, VALOR_DIARIA, FECHAMENTO
                     FROM PEDIDOS 
-                    WHERE LIDER = ? 
-                      AND CAST(DATA_RETIRADA AS DATE) = ?
+                    WHERE LIDER = %s 
+                      AND CAST(DATA_RETIRADA AS DATE) = %s
                     ORDER BY DATA_ENVIO1 DESC, ID DESC
                     """
                     
@@ -971,13 +971,13 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 # Atualizar temperaturas no banco (SEM IMAGENS PRIMEIRO)
                 query_temp = """
                 UPDATE PEDIDOS 
-                SET TEMPERATURA_RETIRADA = ?, 
-                    TEMPERATURA_CONSUMO = ?,
-                    HORA_RETIRADA = ?,
-                    HORA_CONSUMO = ?,
+                SET TEMPERATURA_RETIRADA = %s, 
+                    TEMPERATURA_CONSUMO = %s,
+                    HORA_RETIRADA = %s,
+                    HORA_CONSUMO = %s,
                     AFERIU_TEMPERATURA = 'SIM',
-                    OBSERVACOES_TEMP = ?
-                WHERE ID = ?
+                    OBSERVACOES_TEMP = %s
+                WHERE ID = %s
                 """
                 
                 # Converter horas para formato datetime2 do SQL Server
@@ -986,7 +986,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 hora_consumo_dt = None
                 
                 # BUSCAR A DATA DE RETIRADA DO PEDIDO NO BANCO
-                query_data = "SELECT DATA_RETIRADA FROM PEDIDOS WHERE ID = ?"
+                query_data = "SELECT DATA_RETIRADA FROM PEDIDOS WHERE ID = %s"
                 resultado_data = executar_query(query_data, [pedido_id])
                 
                 if resultado_data and len(resultado_data) > 0:
@@ -1059,9 +1059,9 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     if url_img_retirada and url_img_consumo:
                         query_img = """
                         UPDATE PEDIDOS 
-                        SET IMG_RETIRADA = ?, 
-                            IMG_CONSUMO = ?
-                        WHERE ID = ?
+                        SET IMG_RETIRADA = %s, 
+                            IMG_CONSUMO = %s
+                        WHERE ID = %s
                         """
                         
                         resultado_img = executar_query(query_img, [
