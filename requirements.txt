@@ -1,2 +1,6 @@
 pyodbc
 requests
+Flask
+Flask-CORS
+pytz
+python-dotenv
