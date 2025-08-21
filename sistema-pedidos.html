@@ -2500,9 +2500,10 @@
             // Mostrar tela de pedido
             document.getElementById('orderScreen').classList.remove('hidden');
             
-            // PREENCHER AUTOMATICAMENTE OS CAMPOS QUANDO ABRE NOVO PEDIDO
-            setTimeout(function() {
-                console.log('🔄 Preenchendo campos automaticamente ao abrir Novo Pedido...');
+            // BUSCAR LÍDER ESPECÍFICO DA EQUIPE QUANDO ABRE NOVO PEDIDO
+            setTimeout(async function() {
+                console.log('🔄 Buscando líder específico da equipe ao abrir Novo Pedido...');
+                await buscarLiderDaEquipe();
                 preencherCamposAutomaticamente();
             }, 100); // Pequeno delay para garantir que a tela foi exibida
         }
@@ -5776,103 +5777,144 @@ var templateParams = {
             }
         }
 
-        // Função para buscar dados reais das APIs do Azure SQL
-        async function buscarDadosPorProjetoEquipe(projeto, equipe) {
+        // Função para buscar líder específico da equipe quando abre Novo Pedido
+        async function buscarLiderDaEquipe() {
             try {
-                console.log(`🔍 Buscando dados para projeto: ${projeto}, equipe: ${equipe}`);
-                
-                // 🎯 IMPORTANTE: Buscar organograma específico da equipe digitada no login
-                // Isso garante que o líder correto seja encontrado
-                const organogramaUrl = `${getServerBaseUrl()}/api/organograma?projeto=${projeto}&equipe=${equipe}`;
-                console.log(`🌐 URL do organograma: ${organogramaUrl}`);
-                
-                const [fornecedoresResponse, organogramaResponse, colaboradoresResponse] = await Promise.all([
-                    fetch(`${getServerBaseUrl()}/api/fornecedores?projeto=${projeto}`),
-                    fetch(organogramaUrl), // ✅ Filtrar por equipe específica
-                    fetch(`${getServerBaseUrl()}/api/colaboradores?equipe=${equipe}`)
-                ]);
-                
-                // Verificar se as chamadas foram bem-sucedidas
-                if (!fornecedoresResponse.ok || !organogramaResponse.ok || !colaboradoresResponse.ok) {
-                    throw new Error('Erro em uma ou mais chamadas da API');
+                const equipeLogada = localStorage.getItem('equipe_logada') || '';
+                if (!equipeLogada) {
+                    console.log('❌ Nenhuma equipe logada encontrada');
+                    return;
                 }
                 
-                // Converter respostas para JSON
-                const fornecedoresData = await fornecedoresResponse.json();
-                const organogramaData = await organogramaResponse.json();
-                const colaboradoresData = await colaboradoresResponse.json();
+                // Extrair projeto da equipe (ex: 700AF -> 700)
+                const projeto = equipeLogada.replace(/[^0-9]/g, '');
                 
-                // Verificar se há erros nas respostas
-                if (fornecedoresData.error || organogramaData.error || colaboradoresData.error) {
-                    throw new Error('Erro nos dados retornados pelas APIs');
+                console.log(`🎯 Buscando líder específico para projeto=${projeto}, equipe=${equipeLogada}`);
+                
+                // Buscar organograma específico da equipe
+                const organogramaUrl = `${getServerBaseUrl()}/api/organograma?projeto=${projeto}&equipe=${equipeLogada}`;
+                console.log(`🌐 URL do organograma específico: ${organogramaUrl}`);
+                
+                const response = await fetch(organogramaUrl);
+                if (!response.ok) {
+                    throw new Error(`Erro na API: ${response.status}`);
                 }
                 
-                // Armazenar dados globalmente
-                window.dadosFornecedores = fornecedoresData.fornecedores || [];
+                const organogramaData = await response.json();
+                if (organogramaData.error) {
+                    throw new Error(organogramaData.message || 'Erro na API do organograma');
+                }
+                
+                // Atualizar dados do organograma globalmente
                 window.dadosOrganograma = organogramaData.organograma || [];
-                window.dadosColaboradores = colaboradoresData.colaboradores || [];
                 
-                console.log(`🎯 DEBUG ORGANOGRAMA - Dados recebidos para equipe ${equipe}:`, organogramaData);
-                console.log(`🎯 DEBUG ORGANOGRAMA - Total de registros: ${window.dadosOrganograma.length}`);
+                console.log(`🎯 DEBUG ORGANOGRAMA ESPECÍFICO - Dados para equipe ${equipeLogada}:`, organogramaData);
+                console.log(`🎯 Total de registros do organograma: ${window.dadosOrganograma.length}`);
+                
                 window.dadosOrganograma.forEach((org, index) => {
                     console.log(`🎯 Registro ${index}: EQUIPE=${org.EQUIPE}, LIDER=${org.LIDER}`);
                 });
                 
-                // Salvar cache offline
-                const cacheData = {
-                    fornecedores: window.dadosFornecedores,
-                    organograma: window.dadosOrganograma,
-                    colaboradores: window.dadosColaboradores,
-                    projeto: projeto,
-                    equipe: equipe,
-                    timestamp: Date.now()
-                };
-                localStorage.setItem('dadosAPI_cache', JSON.stringify(cacheData));
-                console.log('💾 Cache de dados das APIs salvo offline');
-                
-                // Popular colaboradores na interface
-                popularColaboradores(window.dadosColaboradores);
-                
-                // Buscar dados do PAGCORP_CAD usando o líder do organograma
-                let dadosPagcorp = [];
+                // Buscar PAGCORP do líder encontrado
                 if (window.dadosOrganograma.length > 0 && window.dadosOrganograma[0].LIDER) {
                     const lider = window.dadosOrganograma[0].LIDER;
+                    console.log(`🔍 Buscando PAGCORP para líder: ${lider}`);
+                    
                     try {
                         const pagcorpResponse = await fetch(`${getServerBaseUrl()}/api/pagcorp?lider=${encodeURIComponent(lider)}`);
                         if (pagcorpResponse.ok) {
                             const pagcorpData = await pagcorpResponse.json();
                             if (!pagcorpData.error) {
-                                dadosPagcorp = pagcorpData.pagcorp || [];
-                                
-                                // PREENCHER AUTOMATICAMENTE O PAGCORP SE ENCONTRADO
-                                if (dadosPagcorp.length > 0) {
-                                    const pagcorpInput = document.getElementById('pagcorpInput');
-                                    if (pagcorpInput && !pagcorpInput.value.trim()) {
-                                        // Se há dados PAGCORP, pegar o primeiro
-                                        const pagcorpValue = dadosPagcorp[0].PAGCORP || dadosPagcorp[0].CODIGO || '';
-                                        pagcorpInput.value = pagcorpValue;
-                                        console.log(`✅ PAGCORP preenchido automaticamente: ${pagcorpValue}`);
-                                    }
-                                } else {
-                                    console.log('ℹ️ Nenhum PAGCORP encontrado para o líder, campo permanece vazio');
-                                }
+                                window.dadosPagcorp = pagcorpData.pagcorp || [];
+                                console.log(`✅ PAGCORP encontrado: ${window.dadosPagcorp.length} registros`);
+                            } else {
+                                window.dadosPagcorp = [];
+                                console.log('❌ Erro ao buscar PAGCORP:', pagcorpData.message);
                             }
+                        } else {
+                            window.dadosPagcorp = [];
+                            console.log('❌ Erro na API do PAGCORP');
                         }
                     } catch (e) {
-                        console.warn('Erro ao buscar dados PAGCORP_CAD:', e);
+                        window.dadosPagcorp = [];
+                        console.warn('❌ Erro ao buscar PAGCORP:', e);
                     }
+                } else {
+                    window.dadosPagcorp = [];
+                    console.log('❌ Nenhum líder encontrado no organograma para buscar PAGCORP');
                 }
-                window.dadosPagcorp = dadosPagcorp;
                 
-                // Adicionar PAGCORP ao cache
-                cacheData.pagcorp = dadosPagcorp;
+                return true;
+                
+            } catch (error) {
+                console.error('❌ Erro ao buscar líder da equipe:', error);
+                return false;
+            }
+        }
+
+        // Função para buscar dados reais das APIs do Azure SQL
+        async function buscarDadosPorProjetoEquipe(projeto, equipe) {
+            try {
+                console.log(`🔍 Buscando dados para projeto: ${projeto}, equipe: ${equipe}`);
+                
+                // 🎯 NO LOGIN: Buscar apenas fornecedores e colaboradores (SEM organograma)
+                // O organograma será buscado especificamente quando abrir "Novo Pedido"
+                console.log(`🌐 Buscando fornecedores e colaboradores (organograma será buscado no Novo Pedido)`);
+                
+                const [fornecedoresResponse, colaboradoresResponse] = await Promise.all([
+                    fetch(`${getServerBaseUrl()}/api/fornecedores?projeto=${projeto}`),
+                    fetch(`${getServerBaseUrl()}/api/colaboradores?equipe=${equipe}`)
+                ]);
+                
+                // Verificar se as chamadas foram bem-sucedidas
+                if (!fornecedoresResponse.ok || !colaboradoresResponse.ok) {
+                    throw new Error('Erro em uma ou mais chamadas da API');
+                }
+                
+                // Converter respostas para JSON
+                const fornecedoresData = await fornecedoresResponse.json();
+                const colaboradoresData = await colaboradoresResponse.json();
+                
+                // Verificar se há erros nas respostas
+                if (fornecedoresData.error || colaboradoresData.error) {
+                    throw new Error('Erro nos dados retornados pelas APIs');
+                }
+                
+                // Armazenar dados globalmente (SEM organograma por enquanto)
+                window.dadosFornecedores = fornecedoresData.fornecedores || [];
+                window.dadosColaboradores = colaboradoresData.colaboradores || [];
+                window.dadosOrganograma = []; // Será preenchido no botão "Novo Pedido"
+                
+                console.log(`✅ Dados do login carregados:`, {
+                    fornecedores: window.dadosFornecedores.length,
+                    colaboradores: window.dadosColaboradores.length,
+                    organograma: 'Será buscado no Novo Pedido'
+                });
+                
+                // Salvar cache offline (SEM organograma por enquanto)
+                const cacheData = {
+                    fornecedores: window.dadosFornecedores,
+                    organograma: [], // Será buscado no botão "Novo Pedido"
+                    colaboradores: window.dadosColaboradores,
+                    pagcorp: [], // Será buscado no botão "Novo Pedido" junto com organograma
+                    projeto: projeto,
+                    equipe: equipe,
+                    timestamp: Date.now()
+                };
                 localStorage.setItem('dadosAPI_cache', JSON.stringify(cacheData));
+                console.log('💾 Cache de dados das APIs salvo offline (sem organograma/pagcorp)');
+                
+                // Popular colaboradores na interface
+                popularColaboradores(window.dadosColaboradores);
+                
+                // PAGCORP será buscado no botão "Novo Pedido" junto com o organograma
+                window.dadosPagcorp = [];
                 
                 // Mostrar dados no console
                 console.log('Fornecedores:', window.dadosFornecedores);
-                console.log('Organograma:', window.dadosOrganograma);
                 console.log('Colaboradores:', window.dadosColaboradores);
-                console.log('Pagcorp:', window.dadosPagcorp);
+                console.log('Organograma: Será buscado no Novo Pedido');
+                console.log('Pagcorp: Será buscado no Novo Pedido');
                 
                 return true;
                 
