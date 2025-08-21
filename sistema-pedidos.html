@@ -5612,20 +5612,29 @@ var templateParams = {
             const equipeLogada = localStorage.getItem('equipe_logada') || '';
             
             console.log(`🎯 Preenchimento automático para equipe: "${equipeLogada}"`);
+            console.log(`🎯 DEBUG - window.dadosOrganograma atual:`, window.dadosOrganograma);
             
             // 🎯 PRIORIDADE 1: Buscar líder no organograma específico da equipe digitada
             if (window.dadosOrganograma && window.dadosOrganograma.length > 0) {
+                console.log(`🔍 Procurando equipe "${equipeLogada}" no organograma...`);
+                
                 // Buscar organograma exato da equipe logada
-                const organogramaEquipe = window.dadosOrganograma.find(org => 
-                    org.EQUIPE === equipeLogada
-                );
+                const organogramaEquipe = window.dadosOrganograma.find(org => {
+                    console.log(`🔍 Comparando: "${org.EQUIPE}" === "${equipeLogada}"`);
+                    return org.EQUIPE === equipeLogada;
+                });
+                
+                console.log(`🔍 Resultado da busca:`, organogramaEquipe);
                 
                 if (organogramaEquipe && organogramaEquipe.LIDER) {
                     liderNome = organogramaEquipe.LIDER;
                     console.log(`✅ Líder encontrado no organograma da equipe "${equipeLogada}": "${liderNome}"`);
                 } else {
                     console.log(`⚠️ Equipe "${equipeLogada}" não encontrada no organograma ou sem líder definido`);
+                    console.log(`⚠️ Dados disponíveis no organograma:`, window.dadosOrganograma);
                 }
+            } else {
+                console.log(`⚠️ Nenhum dado de organograma disponível`);
             }
             
             // 🎯 FALLBACK: Buscar líder na lista de colaboradores da equipe específica
@@ -5785,6 +5794,11 @@ var templateParams = {
                     console.log('❌ Nenhuma equipe logada encontrada');
                     return;
                 }
+                
+                // ⚠️ LIMPAR DADOS ANTIGOS ANTES DE BUSCAR NOVOS
+                console.log('🧹 Limpando dados antigos do organograma...');
+                window.dadosOrganograma = [];
+                window.dadosPagcorp = [];
                 
                 // Extrair projeto da equipe (ex: 700AF -> 700)
                 const projeto = equipeLogada.replace(/[^0-9]/g, '');
