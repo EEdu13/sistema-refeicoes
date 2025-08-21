@@ -5783,9 +5783,12 @@ var templateParams = {
                 
                 // 🎯 IMPORTANTE: Buscar organograma específico da equipe digitada no login
                 // Isso garante que o líder correto seja encontrado
+                const organogramaUrl = `${getServerBaseUrl()}/api/organograma?projeto=${projeto}&equipe=${equipe}`;
+                console.log(`🌐 URL do organograma: ${organogramaUrl}`);
+                
                 const [fornecedoresResponse, organogramaResponse, colaboradoresResponse] = await Promise.all([
                     fetch(`${getServerBaseUrl()}/api/fornecedores?projeto=${projeto}`),
-                    fetch(`${getServerBaseUrl()}/api/organograma?projeto=${projeto}&equipe=${equipe}`), // ✅ Filtrar por equipe específica
+                    fetch(organogramaUrl), // ✅ Filtrar por equipe específica
                     fetch(`${getServerBaseUrl()}/api/colaboradores?equipe=${equipe}`)
                 ]);
                 
@@ -5808,6 +5811,12 @@ var templateParams = {
                 window.dadosFornecedores = fornecedoresData.fornecedores || [];
                 window.dadosOrganograma = organogramaData.organograma || [];
                 window.dadosColaboradores = colaboradoresData.colaboradores || [];
+                
+                console.log(`🎯 DEBUG ORGANOGRAMA - Dados recebidos para equipe ${equipe}:`, organogramaData);
+                console.log(`🎯 DEBUG ORGANOGRAMA - Total de registros: ${window.dadosOrganograma.length}`);
+                window.dadosOrganograma.forEach((org, index) => {
+                    console.log(`🎯 Registro ${index}: EQUIPE=${org.EQUIPE}, LIDER=${org.LIDER}`);
+                });
                 
                 // Salvar cache offline
                 const cacheData = {
@@ -5905,16 +5914,24 @@ var templateParams = {
                 
                 const cache = JSON.parse(cacheData);
                 
-                // ✅ ACEITAR QUALQUER PROJETO/EQUIPE - SEMPRE PERMITIR LOGIN
-                console.log('✅ Cache encontrado - permitindo login para qualquer equipe');
-                console.log(`📋 Cache original: projeto=${cache.projeto}, equipe=${cache.equipe}`);
-                console.log(`📋 Login atual: projeto=${projeto}, equipe=${equipe}`);
-                
-                // Carregar dados do cache (mesmo que seja de equipe diferente)
-                window.dadosFornecedores = cache.fornecedores || [];
-                window.dadosOrganograma = cache.organograma || [];
-                window.dadosColaboradores = cache.colaboradores || [];
-                window.dadosPagcorp = cache.pagcorp || [];
+                // ✅ VERIFICAR SE CACHE É DA EQUIPE CORRETA ANTES DE USAR
+                if (cache.projeto === projeto && cache.equipe === equipe) {
+                    console.log('✅ Cache encontrado para a equipe correta - usando cache');
+                    console.log(`📋 Cache: projeto=${cache.projeto}, equipe=${cache.equipe}`);
+                    
+                    // Carregar dados do cache (equipe correta)
+                    window.dadosFornecedores = cache.fornecedores || [];
+                    window.dadosOrganograma = cache.organograma || [];
+                    window.dadosColaboradores = cache.colaboradores || [];
+                    window.dadosPagcorp = cache.pagcorp || [];
+                    
+                    console.log(`🎯 DEBUG CACHE - Organograma carregado:`, window.dadosOrganograma);
+                } else {
+                    console.log('⚠️ Cache é de equipe diferente - não usando cache');
+                    console.log(`📋 Cache: projeto=${cache.projeto}, equipe=${cache.equipe}`);
+                    console.log(`📋 Solicitado: projeto=${projeto}, equipe=${equipe}`);
+                    return false; // Não usar cache de equipe diferente
+                }
                 
                 // Popular interface
                 popularColaboradores(window.dadosColaboradores);
