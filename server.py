@@ -43,9 +43,9 @@ AZURE_CONFIG = {
 
 # Configuração do Azure Blob Storage
 AZURE_BLOB_CONFIG = {
-    'account_name': os.getenv('AZURE_BLOB_ACCOUNT'),
-    'container_name': os.getenv('AZURE_BLOB_CONTAINER'),
-    'sas_token': os.getenv('AZURE_BLOB_SAS_TOKEN')
+    'account_name': os.getenv('AZURE_STORAGE_ACCOUNT'),
+    'container_name': os.getenv('AZURE_STORAGE_CONTAINER'),
+    'sas_token': os.getenv('AZURE_SAS_TOKEN')
 }
 
 # Debug das configurações do Azure Blob
@@ -301,9 +301,9 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
             response = {
                 "azure_blob_config": AZURE_BLOB_CONFIG,
                 "env_vars": {
-                    "AZURE_BLOB_ACCOUNT": os.getenv('AZURE_BLOB_ACCOUNT', 'NÃO DEFINIDA'),
-                    "AZURE_BLOB_CONTAINER": os.getenv('AZURE_BLOB_CONTAINER', 'NÃO DEFINIDA'),
-                    "AZURE_BLOB_SAS_TOKEN": os.getenv('AZURE_BLOB_SAS_TOKEN', 'NÃO DEFINIDA')[:50] + "..." if os.getenv('AZURE_BLOB_SAS_TOKEN') else 'NÃO DEFINIDA'
+                    "AZURE_STORAGE_ACCOUNT": os.getenv('AZURE_STORAGE_ACCOUNT', 'NÃO DEFINIDA'),
+                    "AZURE_STORAGE_CONTAINER": os.getenv('AZURE_STORAGE_CONTAINER', 'NÃO DEFINIDA'),
+                    "AZURE_SAS_TOKEN": os.getenv('AZURE_SAS_TOKEN', 'NÃO DEFINIDA')[:50] + "..." if os.getenv('AZURE_SAS_TOKEN') else 'NÃO DEFINIDA'
                 },
                 "timestamp": datetime.now(pytz.timezone('America/Sao_Paulo')).isoformat()
             }
