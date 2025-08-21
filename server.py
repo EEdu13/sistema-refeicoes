@@ -48,6 +48,20 @@ AZURE_BLOB_CONFIG = {
     'sas_token': os.getenv('AZURE_BLOB_SAS_TOKEN')
 }
 
+# Debug das configurações do Azure Blob
+print("🔧 DEBUG Azure Blob Config:")
+print(f"  account_name: {AZURE_BLOB_CONFIG['account_name']}")
+print(f"  container_name: {AZURE_BLOB_CONFIG['container_name']}")
+print(f"  sas_token: {'***' if AZURE_BLOB_CONFIG['sas_token'] else 'MISSING'}")
+
+# Verificar se todas as configurações estão presentes
+if not all(AZURE_BLOB_CONFIG.values()):
+    print("❌ ERRO: Configurações do Azure Blob Storage estão incompletas!")
+    missing = [k for k, v in AZURE_BLOB_CONFIG.items() if not v]
+    print(f"   Variáveis faltando: {missing}")
+else:
+    print("✅ Configurações do Azure Blob Storage carregadas com sucesso")
+
 def conectar_azure_sql():
     """Conecta ao Azure SQL Server"""
     try:
@@ -73,6 +87,11 @@ def upload_imagem_blob(imagem_base64, nome_arquivo):
     try:
         print(f"📷 Iniciando upload RÁPIDO para blob: {nome_arquivo}")
         
+        # Verificar configurações antes do upload
+        if not all(AZURE_BLOB_CONFIG.values()):
+            print("❌ Configurações do Azure Blob incompletas - usando backup local")
+            return f"local_backup_{nome_arquivo}"
+        
         # Remover prefixo data:image se existir
         if ',' in imagem_base64:
             imagem_base64 = imagem_base64.split(',')[1]
@@ -94,6 +113,7 @@ def upload_imagem_blob(imagem_base64, nome_arquivo):
         
         # URL do blob para upload (com SAS token)
         blob_url_upload = f"https://{AZURE_BLOB_CONFIG['account_name']}.blob.core.windows.net/{AZURE_BLOB_CONFIG['container_name']}/{nome_unico}?{AZURE_BLOB_CONFIG['sas_token']}"
+        print(f"🌐 URL de upload: {blob_url_upload[:100]}...")  # Mostrar só início da URL
         
         # Headers para upload
         headers = {
@@ -105,6 +125,10 @@ def upload_imagem_blob(imagem_base64, nome_arquivo):
         
         # Fazer upload com TIMEOUT REDUZIDO
         response = requests.put(blob_url_upload, data=imagem_bytes, headers=headers, timeout=10)
+        
+        print(f"📤 Response status: {response.status_code}")
+        if response.status_code not in [200, 201]:
+            print(f"📤 Response body: {response.text[:200]}")  # Primeiros 200 chars da resposta
         
         if response.status_code in [200, 201]:
             # URL pública da imagem (sem SAS token para armazenar)
