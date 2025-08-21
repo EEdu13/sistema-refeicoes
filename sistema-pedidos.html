@@ -5324,20 +5324,88 @@ var templateParams = {
 
         // ========== SISTEMA DE LOGIN PERSISTENTE ==========
         
-        function verificarLoginSalvo() {
+        async function verificarLoginSalvo() {
             console.log('🔍 Verificando login salvo...');
             
             try {
-                const loginSalvo = localStorage.getItem('loginData');
+                let loginSalvo = null;
+                let fonte = '';
+                
+                // 🎯 BUSCAR LOGIN EM MÚLTIPLAS FONTES (iOS PWA)
+                
+                // 1. Tentar localStorage primeiro
+                const loginLocalStorage = localStorage.getItem('loginData');
+                if (loginLocalStorage) {
+                    loginSalvo = loginLocalStorage;
+                    fonte = 'localStorage';
+                }
+                
+                // 2. Se não encontrou, tentar sessionStorage
+                if (!loginSalvo) {
+                    const loginSessionStorage = sessionStorage.getItem('loginData_backup');
+                    if (loginSessionStorage) {
+                        loginSalvo = loginSessionStorage;
+                        fonte = 'sessionStorage';
+                    }
+                }
+                
+                // 3. Se não encontrou, tentar cookies
+                if (!loginSalvo) {
+                    const cookies = document.cookie.split(';');
+                    const loginCookie = cookies.find(cookie => cookie.trim().startsWith('loginData='));
+                    if (loginCookie) {
+                        try {
+                            const cookieValue = loginCookie.split('=')[1];
+                            loginSalvo = decodeURIComponent(cookieValue);
+                            fonte = 'cookie';
+                        } catch (cookieError) {
+                            console.log('⚠️ Erro ao ler cookie de login:', cookieError);
+                        }
+                    }
+                }
+                
+                // 4. Se não encontrou, tentar Service Worker (iOS PWA última tentativa)
+                if (!loginSalvo && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                    try {
+                        const channel = new MessageChannel();
+                        const swLoginPromise = new Promise((resolve) => {
+                            channel.port1.onmessage = (e) => {
+                                if (e.data.type === 'LOGIN_DATA' && e.data.data) {
+                                    resolve(JSON.stringify(e.data.data));
+                                } else {
+                                    resolve(null);
+                                }
+                            };
+                            setTimeout(() => resolve(null), 1000); // Timeout de 1 segundo
+                        });
+                        
+                        navigator.serviceWorker.controller.postMessage({
+                            type: 'GET_LOGIN'
+                        }, [channel.port2]);
+                        
+                        const swLogin = await swLoginPromise;
+                        if (swLogin) {
+                            loginSalvo = swLogin;
+                            fonte = 'serviceWorker';
+                        }
+                    } catch (swError) {
+                        console.log('⚠️ Erro ao buscar login no Service Worker:', swError);
+                    }
+                }
+                
                 if (loginSalvo) {
                     const dados = JSON.parse(loginSalvo);
                     const agora = Date.now();
-                    const tempoExpiracao = 24 * 60 * 60 * 1000; // 24 horas
+                    const tempoExpiracao = 30 * 24 * 60 * 60 * 1000; // 30 dias para iOS PWA
                     
                     // Verificar se login não expirou
                     if (agora - dados.timestamp < tempoExpiracao) {
-                        console.log('✅ Login válido encontrado, carregando automaticamente...');
+                        console.log(`✅ Login válido encontrado em ${fonte}, carregando automaticamente...`);
                         console.log(`👤 Usuário: ${dados.projeto}-${dados.equipe}`);
+                        console.log(`🕐 Login salvo há: ${Math.round((agora - dados.timestamp) / (1000 * 60 * 60))} horas`);
+                        
+                        // Restaurar em TODAS as fontes de persistência
+                        salvarLogin(dados.projeto, dados.equipe);
                         
                         // Preencher campos
                         document.getElementById('projetoInput').value = dados.projeto;
@@ -5347,12 +5415,16 @@ var templateParams = {
                         fazerLoginAutomatico(dados.projeto, dados.equipe);
                         return true;
                     } else {
-                        console.log('⏰ Login expirado, removendo...');
+                        console.log('⏰ Login expirado, removendo de todas as fontes...');
+                        // Limpar todas as fontes
                         localStorage.removeItem('loginData');
+                        sessionStorage.removeItem('loginData_backup');
+                        document.cookie = 'loginData=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                        document.cookie = 'equipe_logada=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
                     }
                 }
                 
-                console.log('❌ Nenhum login salvo encontrado');
+                console.log('❌ Nenhum login salvo encontrado em nenhuma fonte');
                 return false;
                 
             } catch (error) {
@@ -5365,19 +5437,79 @@ var templateParams = {
             const loginData = {
                 projeto: projeto,
                 equipe: equipe,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                persistentLogin: true // Flag para indicar login persistente
             };
-            localStorage.setItem('loginData', JSON.stringify(loginData));
-            localStorage.setItem('equipe_logada', equipe); // 🎯 SALVAR EQUIPE SEPARADAMENTE
-            console.log('💾 Login salvo para permanecer logado');
-            console.log('👥 Equipe salva para filtros:', equipe);
+            
+            // 🎯 MÚLTIPLAS ESTRATÉGIAS DE PERSISTÊNCIA PARA iOS
+            try {
+                // 1. localStorage (padrão)
+                localStorage.setItem('loginData', JSON.stringify(loginData));
+                localStorage.setItem('equipe_logada', equipe);
+                
+                // 2. sessionStorage (backup)
+                sessionStorage.setItem('loginData_backup', JSON.stringify(loginData));
+                sessionStorage.setItem('equipe_logada_backup', equipe);
+                
+                // 3. Cookie persistente (para iOS PWA)
+                const expirationDate = new Date();
+                expirationDate.setTime(expirationDate.getTime() + (30 * 24 * 60 * 60 * 1000)); // 30 dias
+                document.cookie = `loginData=${encodeURIComponent(JSON.stringify(loginData))}; expires=${expirationDate.toUTCString()}; path=/; SameSite=Strict`;
+                document.cookie = `equipe_logada=${encodeURIComponent(equipe)}; expires=${expirationDate.toUTCString()}; path=/; SameSite=Strict`;
+                
+                // 4. Cache do Service Worker (através de postMessage)
+                if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({
+                        type: 'SAVE_LOGIN',
+                        data: loginData
+                    });
+                }
+                
+                console.log('💾 Login salvo com múltiplas estratégias (localStorage + sessionStorage + cookie + SW)');
+                console.log('👥 Equipe salva para filtros:', equipe);
+                console.log('🔒 Login persistente ativado para iOS PWA');
+                
+            } catch (error) {
+                console.error('❌ Erro ao salvar login:', error);
+                // Pelo menos tentar salvar no localStorage
+                try {
+                    localStorage.setItem('loginData', JSON.stringify(loginData));
+                    localStorage.setItem('equipe_logada', equipe);
+                } catch (fallbackError) {
+                    console.error('❌ Erro crítico: não foi possível salvar login', fallbackError);
+                }
+            }
         }
         
         function fazerLogout() {
             console.log('🚪 Fazendo logout...');
             
-            // Remover login salvo
-            localStorage.removeItem('loginData');
+            // 🎯 REMOVER LOGIN DE TODAS AS FONTES DE PERSISTÊNCIA
+            try {
+                // 1. localStorage
+                localStorage.removeItem('loginData');
+                localStorage.removeItem('equipe_logada');
+                
+                // 2. sessionStorage
+                sessionStorage.removeItem('loginData_backup');
+                sessionStorage.removeItem('equipe_logada_backup');
+                
+                // 3. Cookies
+                document.cookie = 'loginData=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                document.cookie = 'equipe_logada=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                
+                // 4. Service Worker
+                if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({
+                        type: 'CLEAR_LOGIN'
+                    });
+                }
+                
+                console.log('🧹 Login removido de todas as fontes de persistência');
+                
+            } catch (error) {
+                console.error('⚠️ Erro ao limpar dados de login:', error);
+            }
             
             // Limpar dados da sessão (manter cache para próximo login)
             window.dadosFornecedores = [];
@@ -5455,9 +5587,9 @@ var templateParams = {
         }
 
         // Inicialização do sistema offline e login por equipe
-        window.addEventListener('load', function() {
+        window.addEventListener('load', async function() {
             // Verificar se há login salvo
-            verificarLoginSalvo();
+            await verificarLoginSalvo();
             
             // CONFIGURAÇÃO ESPECÍFICA PARA iOS
             setupIOSOfflineSystem();

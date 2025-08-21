@@ -1,6 +1,9 @@
 // Service Worker para Background Sync e Notificações
 console.log('🚀 Service Worker carregado');
 
+// 🎯 CACHE PARA PERSISTÊNCIA DE LOGIN iOS PWA
+let loginDataCache = null;
+
 const CACHE_NAME = 'refeicoes-pwa-v1';
 const urlsToCache = [
     '/sistema-pedidos.html',
@@ -356,6 +359,21 @@ self.addEventListener('message', event => {
     } else if (event.data.type === 'KEEP_ALIVE') {
         // Manter Service Worker ativo
         console.log('💓 Service Worker mantido vivo:', new Date().toLocaleTimeString());
+    } else if (event.data.type === 'SAVE_LOGIN') {
+        // 🎯 SALVAR LOGIN NO SERVICE WORKER PARA iOS PWA
+        loginDataCache = event.data.data;
+        console.log('💾 Login salvo no Service Worker para persistência iOS:', loginDataCache);
+    } else if (event.data.type === 'CLEAR_LOGIN') {
+        // 🗑️ LIMPAR LOGIN DO SERVICE WORKER
+        loginDataCache = null;
+        console.log('🚪 Login removido do Service Worker');
+    } else if (event.data.type === 'GET_LOGIN') {
+        // 📤 RETORNAR LOGIN SALVO NO SERVICE WORKER
+        event.ports[0].postMessage({
+            type: 'LOGIN_DATA',
+            data: loginDataCache
+        });
+        console.log('📤 Login enviado do Service Worker:', loginDataCache ? 'encontrado' : 'não encontrado');
     }
 });
 
