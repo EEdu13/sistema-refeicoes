@@ -2235,10 +2235,13 @@
 
                 <div class="form-group">
                     <label>�📷 Foto da Retirada</label>
-                    <input type="file" class="form-control hidden" id="fileRetirada" accept="image/*" capture="environment">
+                    <!-- Input para câmera -->
+                    <input type="file" class="form-control hidden" id="fileRetiradaCamera" accept="image/*" capture="environment">
+                    <!-- Input para galeria -->
+                    <input type="file" class="form-control hidden" id="fileRetirada" accept="image/*">
                     <div class="photo-options">
-                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('fileRetirada').click()">📷 Tirar Foto</button>
-                        <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('fileRetirada').click()">📎 Galeria</button>
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('fileRetiradaCamera').click()">📷 Tirar Foto</button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('fileRetirada').click()">📎 Anexar</button>
                         <button type="button" class="btn btn-info btn-sm" onclick="debugFileInput('fileRetirada')" style="margin-left: 10px;">🔍 Debug</button>
                     </div>
                     <div id="previewRetirada" class="file-preview">
@@ -2265,10 +2268,13 @@
 
                 <div class="form-group">
                     <label>📷 Foto do Consumo</label>
-                    <input type="file" class="form-control hidden" id="fileConsumo" accept="image/*" capture="environment">
+                    <!-- Input para câmera -->
+                    <input type="file" class="form-control hidden" id="fileConsumoCamera" accept="image/*" capture="environment">
+                    <!-- Input para galeria -->
+                    <input type="file" class="form-control hidden" id="fileConsumo" accept="image/*">
                     <div class="photo-options">
-                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('fileConsumo').click()">📷 Tirar Foto</button>
-                        <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('fileConsumo').click()">📎 Galeria</button>
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('fileConsumoCamera').click()">📷 Tirar Foto</button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('fileConsumo').click()">📎 Anexar</button>
                         <button type="button" class="btn btn-info btn-sm" onclick="debugFileInput('fileConsumo')" style="margin-left: 10px;">🔍 Debug</button>
                     </div>
                     <div id="previewConsumo" class="file-preview">
@@ -3267,7 +3273,9 @@
             
             // Verificar se os elementos existem antes de adicionar listeners
             const fileRetirada = document.getElementById('fileRetirada');
+            const fileRetiradaCamera = document.getElementById('fileRetiradaCamera');
             const fileConsumo = document.getElementById('fileConsumo');
+            const fileConsumoCamera = document.getElementById('fileConsumoCamera');
             
             if (!fileRetirada) {
                 console.log('❌ Elemento fileRetirada não encontrado!');
@@ -3283,11 +3291,27 @@
             fileRetirada.removeEventListener('change', fileRetiradaHandler);
             fileConsumo.removeEventListener('change', fileConsumoHandler);
             
+            if (fileRetiradaCamera) {
+                fileRetiradaCamera.removeEventListener('change', fileRetiradaHandler);
+            }
+            
+            if (fileConsumoCamera) {
+                fileConsumoCamera.removeEventListener('change', fileConsumoHandler);
+            }
+            
             // ✅ ADICIONAR NOVOS EVENT LISTENERS
             fileRetirada.addEventListener('change', fileRetiradaHandler);
             fileConsumo.addEventListener('change', fileConsumoHandler);
             
-            console.log('✅ Event listeners configurados para fileRetirada e fileConsumo');
+            if (fileRetiradaCamera) {
+                fileRetiradaCamera.addEventListener('change', fileRetiradaHandler);
+            }
+            
+            if (fileConsumoCamera) {
+                fileConsumoCamera.addEventListener('change', fileConsumoHandler);
+            }
+            
+            console.log('✅ Event listeners configurados para todos os inputs de arquivo');
         }
 
         // ✅ HANDLERS SEPARADOS PARA EVITAR DUPLICAÇÃO
@@ -5584,35 +5608,37 @@ var templateParams = {
         // Função para preencher automaticamente os campos com dados do líder
         function preencherCamposAutomaticamente() {
             let liderNome = '';
+            const equipeLogada = localStorage.getItem('equipe_logada') || '';
             
-            // 🎯 PRIORIDADE 1: Buscar líder na lista de colaboradores da equipe específica
-            if (window.dadosColaboradores && window.dadosColaboradores.length > 0) {
+            console.log(`🎯 Preenchimento automático para equipe: "${equipeLogada}"`);
+            
+            // 🎯 PRIORIDADE 1: Buscar líder no organograma específico da equipe digitada
+            if (window.dadosOrganograma && window.dadosOrganograma.length > 0) {
+                // Buscar organograma exato da equipe logada
+                const organogramaEquipe = window.dadosOrganograma.find(org => 
+                    org.EQUIPE === equipeLogada
+                );
+                
+                if (organogramaEquipe && organogramaEquipe.LIDER) {
+                    liderNome = organogramaEquipe.LIDER;
+                    console.log(`✅ Líder encontrado no organograma da equipe "${equipeLogada}": "${liderNome}"`);
+                } else {
+                    console.log(`⚠️ Equipe "${equipeLogada}" não encontrada no organograma ou sem líder definido`);
+                }
+            }
+            
+            // 🎯 FALLBACK: Buscar líder na lista de colaboradores da equipe específica
+            if (!liderNome && window.dadosColaboradores && window.dadosColaboradores.length > 0) {
                 const liderColaborador = window.dadosColaboradores.find(colab => 
                     colab.IS_LIDER === true || colab.CLASSE === 'LDF'
                 );
                 
                 if (liderColaborador && liderColaborador.NOME) {
                     liderNome = liderColaborador.NOME;
-                    console.log(`🎯 Líder encontrado nos colaboradores da equipe: "${liderNome}"`);
+                    console.log(`🔄 Fallback: Líder encontrado nos colaboradores da equipe: "${liderNome}"`);
                 } else {
                     console.log(`⚠️ Nenhum líder encontrado nos colaboradores da equipe`);
                 }
-            }
-            
-            // 🎯 FALLBACK: Se não encontrou líder nos colaboradores, usar organograma
-            if (!liderNome && window.dadosOrganograma && window.dadosOrganograma.length > 0) {
-                // Buscar o organograma da equipe específica se possível
-                const equipeLogada = localStorage.getItem('equipe_logada') || '';
-                let organogramaEquipe = null;
-                
-                if (equipeLogada) {
-                    organogramaEquipe = window.dadosOrganograma.find(org => org.EQUIPE === equipeLogada);
-                }
-                
-                // Se não encontrou da equipe específica, usar o primeiro do projeto
-                const dadosOrg = organogramaEquipe || window.dadosOrganograma[0];
-                liderNome = dadosOrg.LIDER || '';
-                console.log(`🔄 Fallback: líder encontrado no organograma: "${liderNome}" (equipe: ${dadosOrg.EQUIPE || 'N/A'})`);
             }
             
             if (liderNome) {
@@ -5753,12 +5779,13 @@ var templateParams = {
         // Função para buscar dados reais das APIs do Azure SQL
         async function buscarDadosPorProjetoEquipe(projeto, equipe) {
             try {
-                console.log(`Buscando dados para projeto: ${projeto}, equipe: ${equipe}`);
+                console.log(`🔍 Buscando dados para projeto: ${projeto}, equipe: ${equipe}`);
                 
-                // Fazer chamadas paralelas para fornecedores, organograma e colaboradores
+                // 🎯 IMPORTANTE: Buscar organograma específico da equipe digitada no login
+                // Isso garante que o líder correto seja encontrado
                 const [fornecedoresResponse, organogramaResponse, colaboradoresResponse] = await Promise.all([
                     fetch(`${getServerBaseUrl()}/api/fornecedores?projeto=${projeto}`),
-                    fetch(`${getServerBaseUrl()}/api/organograma?projeto=${projeto}&equipe=${equipe}`),
+                    fetch(`${getServerBaseUrl()}/api/organograma?projeto=${projeto}&equipe=${equipe}`), // ✅ Filtrar por equipe específica
                     fetch(`${getServerBaseUrl()}/api/colaboradores?equipe=${equipe}`)
                 ]);
                 
