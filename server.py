@@ -296,6 +296,18 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 "timestamp": datetime.now(pytz.timezone('America/Sao_Paulo')).isoformat()
             }
             
+        elif path == '/api/debug-azure':
+            # Endpoint para debug das configurações do Azure Blob
+            response = {
+                "azure_blob_config": AZURE_BLOB_CONFIG,
+                "env_vars": {
+                    "AZURE_BLOB_ACCOUNT": os.getenv('AZURE_BLOB_ACCOUNT', 'NÃO DEFINIDA'),
+                    "AZURE_BLOB_CONTAINER": os.getenv('AZURE_BLOB_CONTAINER', 'NÃO DEFINIDA'),
+                    "AZURE_BLOB_SAS_TOKEN": os.getenv('AZURE_BLOB_SAS_TOKEN', 'NÃO DEFINIDA')[:50] + "..." if os.getenv('AZURE_BLOB_SAS_TOKEN') else 'NÃO DEFINIDA'
+                },
+                "timestamp": datetime.now(pytz.timezone('America/Sao_Paulo')).isoformat()
+            }
+            
         elif path == '/api/fornecedores':
             projeto = query_params.get('projeto', [''])[0]
             
