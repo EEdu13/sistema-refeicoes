@@ -5984,39 +5984,50 @@ var templateParams = {
             try {
                 console.log(`🔍 Buscando dados para projeto: ${projeto}, equipe: ${equipe}`);
                 
-                // 🎯 NO LOGIN: Buscar apenas fornecedores e colaboradores (SEM organograma)
-                // O organograma será buscado especificamente quando abrir "Novo Pedido"
-                console.log(`🌐 Buscando fornecedores e colaboradores (organograma será buscado no Novo Pedido)`);
+                // 🎯 CARREGAR TUDO NO LOGIN: fornecedores, colaboradores E organograma
+                console.log(`🌐 Buscando fornecedores, colaboradores E organograma no login`);
                 
-                const [fornecedoresResponse, colaboradoresResponse] = await Promise.all([
+                const [fornecedoresResponse, colaboradoresResponse, organogramaResponse] = await Promise.all([
                     fetch(`${getServerBaseUrl()}/api/fornecedores?projeto=${projeto}`),
-                    fetch(`${getServerBaseUrl()}/api/colaboradores?equipe=${equipe}`)
+                    fetch(`${getServerBaseUrl()}/api/colaboradores?equipe=${equipe}`),
+                    fetch(`${getServerBaseUrl()}/api/organograma?projeto=${projeto}&equipe=${equipe}`)
                 ]);
                 
                 // Verificar se as chamadas foram bem-sucedidas
-                if (!fornecedoresResponse.ok || !colaboradoresResponse.ok) {
+                if (!fornecedoresResponse.ok || !colaboradoresResponse.ok || !organogramaResponse.ok) {
                     throw new Error('Erro em uma ou mais chamadas da API');
                 }
                 
                 // Converter respostas para JSON
                 const fornecedoresData = await fornecedoresResponse.json();
                 const colaboradoresData = await colaboradoresResponse.json();
+                const organogramaData = await organogramaResponse.json();
                 
                 // Verificar se há erros nas respostas
-                if (fornecedoresData.error || colaboradoresData.error) {
+                if (fornecedoresData.error || colaboradoresData.error || organogramaData.error) {
                     throw new Error('Erro nos dados retornados pelas APIs');
                 }
                 
-                // Armazenar dados globalmente (SEM organograma por enquanto)
+                // Armazenar dados globalmente (INCLUINDO ORGANOGRAMA)
                 window.dadosFornecedores = fornecedoresData.fornecedores || [];
                 window.dadosColaboradores = colaboradoresData.colaboradores || [];
-                window.dadosOrganograma = []; // Será preenchido no botão "Novo Pedido"
+                window.dadosOrganograma = organogramaData.organograma || [];
                 
                 console.log(`✅ Dados do login carregados:`, {
                     fornecedores: window.dadosFornecedores.length,
                     colaboradores: window.dadosColaboradores.length,
-                    organograma: 'Será buscado no Novo Pedido'
+                    organograma: window.dadosOrganograma.length
                 });
+                
+                // Debug do organograma carregado
+                if (window.dadosOrganograma.length > 0) {
+                    console.log(`🎯 Organograma carregado no login:`);
+                    window.dadosOrganograma.forEach((org, index) => {
+                        console.log(`   ${index}: EQUIPE=${org.EQUIPE}, COORDENADOR=${org.COORDENADOR}, SUPERVISOR=${org.SUPERVISOR}, LIDER=${org.LIDER}`);
+                    });
+                } else {
+                    console.log(`⚠️ Nenhum dado de organograma encontrado para projeto=${projeto}, equipe=${equipe}`);
+                }
                 
                 // Salvar cache offline (SEM organograma por enquanto)
                 const cacheData = {
