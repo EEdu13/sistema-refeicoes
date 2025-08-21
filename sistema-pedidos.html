@@ -1776,6 +1776,16 @@
                 <input type="text" class="form-control" id="equipeInput" placeholder="Ex: 700TA" autocomplete="off" onkeypress="if(event.key==='Enter') loginEquipe()">
             </div>
             <button class="btn btn-primary" onclick="loginEquipe()">Entrar</button>
+            
+            <!-- Botão para limpar cache -->
+            <div style="margin-top: 20px; text-align: center;">
+                <button class="btn btn-outline-secondary btn-sm" onclick="limparCacheCompleto()" style="font-size: 12px; padding: 8px 16px;">
+                    🧹 Limpar Cache
+                </button>
+                <p style="font-size: 11px; color: #666; margin-top: 5px;">
+                    Use se houver problemas de sincronização
+                </p>
+            </div>
         </div>
 
         <!-- Tela Principal -->
@@ -3317,7 +3327,10 @@
 
         // ✅ HANDLERS SEPARADOS PARA EVITAR DUPLICAÇÃO
         function fileRetiradaHandler(e) {
-            console.log('📷 Arquivo de retirada selecionado:', e.target.files[0]);
+            const inputId = e.target.id;
+            console.log(`📷 RETIRADA - Input acionado: ${inputId}`);
+            console.log(`📷 RETIRADA - Tem capture: ${e.target.hasAttribute('capture')}`);
+            console.log(`📷 RETIRADA - Arquivo selecionado:`, e.target.files[0]);
             var file = e.target.files[0];
             var preview = document.getElementById('previewRetirada');
             var canvas = document.getElementById('canvasRetirada');
@@ -3398,7 +3411,10 @@
         }
 
         function fileConsumoHandler(e) {
-            console.log('📷 Arquivo de consumo selecionado:', e.target.files[0]);
+            const inputId = e.target.id;
+            console.log(`🍽️ CONSUMO - Input acionado: ${inputId}`);
+            console.log(`🍽️ CONSUMO - Tem capture: ${e.target.hasAttribute('capture')}`);
+            console.log(`🍽️ CONSUMO - Arquivo selecionado:`, e.target.files[0]);
             var file = e.target.files[0];
             var preview = document.getElementById('previewConsumo');
             var canvas = document.getElementById('canvasConsumo');
@@ -5526,6 +5542,52 @@ var templateParams = {
                 // Restaurar botão
                 botaoLogin.textContent = textoOriginal;
                 botaoLogin.disabled = false;
+            }
+        }
+
+        // Função para limpar cache completo (PWA)
+        function limparCacheCompleto() {
+            if (confirm('🧹 Deseja limpar todo o cache?\n\nIsso irá:\n- Remover dados salvos offline\n- Limpar login salvo\n- Forçar atualização dos dados\n\nVocê precisará fazer login novamente.')) {
+                try {
+                    console.log('🧹 Iniciando limpeza completa do cache...');
+                    
+                    // Limpar localStorage
+                    console.log('🗑️ Limpando localStorage...');
+                    localStorage.clear();
+                    
+                    // Limpar sessionStorage
+                    console.log('🗑️ Limpando sessionStorage...');
+                    sessionStorage.clear();
+                    
+                    // Limpar dados globais
+                    console.log('🗑️ Limpando variáveis globais...');
+                    window.dadosFornecedores = [];
+                    window.dadosOrganograma = [];
+                    window.dadosColaboradores = [];
+                    window.dadosPagcorp = [];
+                    
+                    // Limpar Service Worker cache
+                    if ('serviceWorker' in navigator && 'caches' in window) {
+                        console.log('🗑️ Limpando cache do Service Worker...');
+                        caches.keys().then(cacheNames => {
+                            return Promise.all(
+                                cacheNames.map(cacheName => caches.delete(cacheName))
+                            );
+                        }).then(() => {
+                            console.log('✅ Cache do Service Worker limpo');
+                        });
+                    }
+                    
+                    console.log('✅ Limpeza completa concluída!');
+                    alert('✅ Cache limpo com sucesso!\n\nA página será recarregada.');
+                    
+                    // Recarregar página
+                    window.location.reload(true);
+                    
+                } catch (error) {
+                    console.error('❌ Erro ao limpar cache:', error);
+                    alert('❌ Erro ao limpar cache. Tente recarregar a página manualmente.');
+                }
             }
         }
 
