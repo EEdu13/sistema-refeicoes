@@ -313,24 +313,36 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
             
         elif path == '/api/organograma':
             projeto = query_params.get('projeto', [''])[0]
+            equipe = query_params.get('equipe', [''])[0]  # Novo parâmetro opcional
             
             if not projeto:
                 response = {"error": True, "message": "Parâmetro projeto é obrigatório"}
             else:
                 # Buscar organograma real do Azure SQL
-                query = """
-                SELECT ID, PROJETO, EQUIPE, LIDER, COORDENADOR, SUPERVISOR 
-                FROM ORGANOGRAMA 
-                WHERE PROJETO = %s
-                ORDER BY EQUIPE
-                """
-                
-                organograma_real = executar_query(query, [projeto])
+                if equipe:
+                    # Se equipe foi informada, filtrar por projeto E equipe
+                    query = """
+                    SELECT ID, PROJETO, EQUIPE, LIDER, COORDENADOR, SUPERVISOR 
+                    FROM ORGANOGRAMA 
+                    WHERE PROJETO = %s AND EQUIPE = %s
+                    ORDER BY EQUIPE
+                    """
+                    organograma_real = executar_query(query, [projeto, equipe])
+                else:
+                    # Se apenas projeto foi informado, buscar todas as equipes do projeto
+                    query = """
+                    SELECT ID, PROJETO, EQUIPE, LIDER, COORDENADOR, SUPERVISOR 
+                    FROM ORGANOGRAMA 
+                    WHERE PROJETO = %s
+                    ORDER BY EQUIPE
+                    """
+                    organograma_real = executar_query(query, [projeto])
                 
                 if organograma_real is not None:
                     response = {
                         "error": False,
                         "projeto": projeto,
+                        "equipe": equipe if equipe else "TODAS",
                         "total": len(organograma_real),
                         "organograma": organograma_real
                     }
@@ -339,10 +351,15 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     organograma_mock = [
                         {"ID": 1, "PROJETO": "700", "EQUIPE": "700TA", "LIDER": "TESTE LIDER", "COORDENADOR": "TESTE COORD", "SUPERVISOR": "TESTE SUPER"}
                     ]
-                    org_filtrado = [o for o in organograma_mock if o["PROJETO"] == projeto]
+                    if equipe:
+                        org_filtrado = [o for o in organograma_mock if o["PROJETO"] == projeto and o["EQUIPE"] == equipe]
+                    else:
+                        org_filtrado = [o for o in organograma_mock if o["PROJETO"] == projeto]
+                    
                     response = {
                         "error": False,
                         "projeto": projeto,
+                        "equipe": equipe if equipe else "TODAS",
                         "total": len(org_filtrado),
                         "organograma": org_filtrado,
                         "warning": "Usando dados simulados - erro na conexão com Azure SQL"

@@ -2239,6 +2239,7 @@
                     <div class="photo-options">
                         <button type="button" class="btn btn-secondary" onclick="document.getElementById('fileRetirada').click()">📷 Tirar Foto</button>
                         <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('fileRetirada').click()">📎 Galeria</button>
+                        <button type="button" class="btn btn-info btn-sm" onclick="debugFileInput('fileRetirada')" style="margin-left: 10px;">🔍 Debug</button>
                     </div>
                     <div id="previewRetirada" class="file-preview">
                         <span>📷 Nenhuma foto capturada</span>
@@ -2268,6 +2269,7 @@
                     <div class="photo-options">
                         <button type="button" class="btn btn-secondary" onclick="document.getElementById('fileConsumo').click()">📷 Tirar Foto</button>
                         <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('fileConsumo').click()">📎 Galeria</button>
+                        <button type="button" class="btn btn-info btn-sm" onclick="debugFileInput('fileConsumo')" style="margin-left: 10px;">🔍 Debug</button>
                     </div>
                     <div id="previewConsumo" class="file-preview">
                         <span>📷 Nenhuma foto capturada</span>
@@ -2961,6 +2963,12 @@
             // Reconfigurar listeners de arquivo (garantir que estão ativos)
             setupFilePreview();
             
+            // ✅ FORÇAR REINICIALIZAÇÃO DOS EVENT LISTENERS DE ARQUIVO
+            setTimeout(() => {
+                console.log('🔄 Reinicializando event listeners de arquivo após delay...');
+                setupFilePreview();
+            }, 100);
+            
             document.getElementById('tempMealInfo').textContent = pending.mealName + ' - ' + pending.date;
         }
         
@@ -3271,175 +3279,217 @@
                 return;
             }
             
-            fileRetirada.addEventListener('change', function(e) {
-                console.log('📷 Arquivo de retirada selecionado:', e.target.files[0]);
-                var file = e.target.files[0];
-                var preview = document.getElementById('previewRetirada');
-                var canvas = document.getElementById('canvasRetirada');
-                
-                if (!preview) {
-                    console.log('❌ Elemento previewRetirada não encontrado!');
-                    return;
-                }
-                
-                if (!canvas) {
-                    console.log('❌ Elemento canvasRetirada não encontrado!');
-                    return;
-                }
-                
-                if (file) {
-                    console.log('✅ Processando arquivo de retirada:', file.name, file.size, 'bytes');
-                    preview.className = 'file-preview has-file';
-                    preview.innerHTML = `📎 ${file.name} (${Math.round(file.size / 1024)} KB)<br>✅ Imagem capturada!`;
-                    
-                    // Desenhar imagem no canvas para captura posterior
-                    var reader = new FileReader();
-                    reader.onload = function(event) {
-                        var img = new Image();
-                        img.onload = function() {
-                            // Verificar se canvas ainda existe
-                            if (!canvas) {
-                                console.log('❌ Canvas foi removido do DOM!');
-                                return;
-                            }
-                            
-                            // Mostrar o canvas
-                            canvas.style.display = 'block';
-                            canvas.width = Math.min(img.width, 800); // Máximo 800px de largura
-                            canvas.height = (canvas.width / img.width) * img.height;
-                            
-                            var ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                            
-                            console.log('✅ Imagem de retirada carregada no canvas:', canvas.width, 'x', canvas.height);
-                            
-                            // SALVAR IMAGEM EM VARIÁVEL GLOBAL IMEDIATAMENTE
-                            globalImageRetirada = canvas.toDataURL('image/jpeg', 0.8);
-                            imageTimestamps.retirada = Date.now();
-                            
-                            console.log('💾 Imagem de RETIRADA salva globalmente:', globalImageRetirada.length, 'caracteres');
-                            console.log('⏰ Timestamp retirada:', imageTimestamps.retirada);
-                            
-                            // Marcar que a imagem foi carregada
-                            canvas.setAttribute('data-image-loaded', 'true');
-                            canvas.setAttribute('data-load-timestamp', Date.now());
-                        };
-                        img.src = event.target.result;
-                    };
-                    reader.readAsDataURL(file);
-                } else {
-                    preview.className = 'file-preview';
-                    // NÃO sobrescrever innerHTML - apenas atualizar o texto, preservando o canvas
-                    const span = preview.querySelector('span');
-                    if (span) {
-                        span.textContent = '📷 Nenhuma foto capturada';
-                    } else {
-                        // Se não existe span, criar um sem remover o canvas
-                        const newSpan = document.createElement('span');
-                        newSpan.textContent = '📷 Nenhuma foto capturada';
-                        preview.insertBefore(newSpan, preview.firstChild);
-                    }
-                    canvas.style.display = 'none';
-                    
-                    // Limpar marcadores de imagem carregada
-                    canvas.removeAttribute('data-image-loaded');
-                    canvas.removeAttribute('data-load-timestamp');
-                    
-                    // LIMPAR VARIÁVEL GLOBAL DE RETIRADA
-                    globalImageRetirada = null;
-                    imageTimestamps.retirada = null;
-                    console.log('🗑️ Imagem de RETIRADA removida das variáveis globais');
-                }
-            });
+            // ✅ REMOVER EVENT LISTENERS EXISTENTES PARA EVITAR DUPLICAÇÃO
+            fileRetirada.removeEventListener('change', fileRetiradaHandler);
+            fileConsumo.removeEventListener('change', fileConsumoHandler);
             
-            fileConsumo.addEventListener('change', function(e) {
-                console.log('📷 Arquivo de consumo selecionado:', e.target.files[0]);
-                var file = e.target.files[0];
-                var preview = document.getElementById('previewConsumo');
-                var canvas = document.getElementById('canvasConsumo');
-                
-                if (!preview) {
-                    console.log('❌ Elemento previewConsumo não encontrado!');
-                    return;
-                }
-                
-                if (!canvas) {
-                    console.log('❌ Elemento canvasConsumo não encontrado!');
-                    return;
-                }
-                
-                if (file) {
-                    console.log('✅ Processando arquivo de consumo:', file.name, file.size, 'bytes');
-                    preview.className = 'file-preview has-file';
-                    preview.innerHTML = `📎 ${file.name} (${Math.round(file.size / 1024)} KB)<br>✅ Imagem capturada!`;
-                    
-                    // Desenhar imagem no canvas para captura posterior
-                    var reader = new FileReader();
-                    reader.onload = function(event) {
-                        var img = new Image();
-                        img.onload = function() {
-                            // Verificar se canvas ainda existe
-                            if (!canvas) {
-                                console.log('❌ Canvas foi removido do DOM!');
-                                return;
-                            }
-                            
-                            // Mostrar o canvas
-                            canvas.style.display = 'block';
-                            canvas.width = Math.min(img.width, 800); // Máximo 800px de largura
-                            canvas.height = (canvas.width / img.width) * img.height;
-                            
-                            var ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                            
-                            console.log('✅ Imagem de consumo carregada no canvas:', canvas.width, 'x', canvas.height);
-                            
-                            // SALVAR IMAGEM EM VARIÁVEL GLOBAL IMEDIATAMENTE
-                            globalImageConsumo = canvas.toDataURL('image/jpeg', 0.8);
-                            imageTimestamps.consumo = Date.now();
-                            
-                            console.log('💾 Imagem de CONSUMO salva globalmente:', globalImageConsumo.length, 'caracteres');
-                            console.log('⏰ Timestamp consumo:', imageTimestamps.consumo);
-                            
-                            // Marcar que a imagem foi carregada
-                            canvas.setAttribute('data-image-loaded', 'true');
-                            canvas.setAttribute('data-load-timestamp', Date.now());
-                        };
-                        img.src = event.target.result;
-                    };
-                    reader.readAsDataURL(file);
-                } else {
-                    preview.className = 'file-preview';
-                    // NÃO sobrescrever innerHTML - apenas atualizar o texto, preservando o canvas
-                    const span = preview.querySelector('span');
-                    if (span) {
-                        span.textContent = '📷 Nenhuma foto capturada';
-                    } else {
-                        // Se não existe span, criar um sem remover o canvas
-                        const newSpan = document.createElement('span');
-                        newSpan.textContent = '📷 Nenhuma foto capturada';
-                        preview.insertBefore(newSpan, preview.firstChild);
-                    }
-                    canvas.style.display = 'none';
-                    
-                    // Limpar marcadores de imagem carregada
-                    canvas.removeAttribute('data-image-loaded');
-                    canvas.removeAttribute('data-load-timestamp');
-                    
-                    // LIMPAR VARIÁVEL GLOBAL DE CONSUMO
-                    globalImageConsumo = null;
-                    imageTimestamps.consumo = null;
-                    console.log('🗑️ Imagem de CONSUMO removida das variáveis globais');
-                }
-            });
+            // ✅ ADICIONAR NOVOS EVENT LISTENERS
+            fileRetirada.addEventListener('change', fileRetiradaHandler);
+            fileConsumo.addEventListener('change', fileConsumoHandler);
             
-            console.log('🎯 Listeners configurados para fileRetirada e fileConsumo');
+            console.log('✅ Event listeners configurados para fileRetirada e fileConsumo');
+        }
+
+        // ✅ HANDLERS SEPARADOS PARA EVITAR DUPLICAÇÃO
+        function fileRetiradaHandler(e) {
+            console.log('📷 Arquivo de retirada selecionado:', e.target.files[0]);
+            var file = e.target.files[0];
+            var preview = document.getElementById('previewRetirada');
+            var canvas = document.getElementById('canvasRetirada');
+            
+            if (!preview) {
+                console.log('❌ Elemento previewRetirada não encontrado!');
+                return;
+            }
+            
+            if (!canvas) {
+                console.log('❌ Elemento canvasRetirada não encontrado!');
+                return;
+            }
+            
+            if (file) {
+                console.log('✅ Processando arquivo de retirada:', file.name, file.size, 'bytes');
+                preview.className = 'file-preview has-file';
+                preview.innerHTML = `📎 ${file.name} (${Math.round(file.size / 1024)} KB)<br>✅ Imagem capturada!`;
+                
+                // Desenhar imagem no canvas para captura posterior
+                var reader = new FileReader();
+                reader.onload = function(event) {
+                    var img = new Image();
+                    img.onload = function() {
+                        // Verificar se canvas ainda existe
+                        if (!canvas) {
+                            console.log('❌ Canvas foi removido do DOM!');
+                            return;
+                        }
+                        
+                        // Mostrar o canvas
+                        canvas.style.display = 'block';
+                        canvas.width = Math.min(img.width, 800); // Máximo 800px de largura
+                        canvas.height = (canvas.width / img.width) * img.height;
+                        
+                        var ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        
+                        console.log('✅ Imagem de retirada carregada no canvas:', canvas.width, 'x', canvas.height);
+                        
+                        // SALVAR IMAGEM EM VARIÁVEL GLOBAL IMEDIATAMENTE
+                        globalImageRetirada = canvas.toDataURL('image/jpeg', 0.8);
+                        imageTimestamps.retirada = Date.now();
+                        
+                        console.log('💾 Imagem de RETIRADA salva globalmente:', globalImageRetirada.length, 'caracteres');
+                        console.log('⏰ Timestamp retirada:', imageTimestamps.retirada);
+                        
+                        // Marcar que a imagem foi carregada
+                        canvas.setAttribute('data-image-loaded', 'true');
+                        canvas.setAttribute('data-load-timestamp', Date.now());
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                preview.className = 'file-preview';
+                // NÃO sobrescrever innerHTML - apenas atualizar o texto, preservando o canvas
+                const span = preview.querySelector('span');
+                if (span) {
+                    span.textContent = '📷 Nenhuma foto capturada';
+                } else {
+                    // Se não existe span, criar um sem remover o canvas
+                    const newSpan = document.createElement('span');
+                    newSpan.textContent = '📷 Nenhuma foto capturada';
+                    preview.insertBefore(newSpan, preview.firstChild);
+                }
+                canvas.style.display = 'none';
+                
+                // Limpar marcadores de imagem carregada
+                canvas.removeAttribute('data-image-loaded');
+                canvas.removeAttribute('data-load-timestamp');
+                
+                // LIMPAR VARIÁVEL GLOBAL DE RETIRADA
+                globalImageRetirada = null;
+                imageTimestamps.retirada = null;
+                console.log('🗑️ Imagem de RETIRADA removida das variáveis globais');
+            }
+        }
+
+        function fileConsumoHandler(e) {
+            console.log('📷 Arquivo de consumo selecionado:', e.target.files[0]);
+            var file = e.target.files[0];
+            var preview = document.getElementById('previewConsumo');
+            var canvas = document.getElementById('canvasConsumo');
+            
+            if (!preview) {
+                console.log('❌ Elemento previewConsumo não encontrado!');
+                return;
+            }
+            
+            if (!canvas) {
+                console.log('❌ Elemento canvasConsumo não encontrado!');
+                return;
+            }
+            
+            if (file) {
+                console.log('✅ Processando arquivo de consumo:', file.name, file.size, 'bytes');
+                preview.className = 'file-preview has-file';
+                preview.innerHTML = `📎 ${file.name} (${Math.round(file.size / 1024)} KB)<br>✅ Imagem capturada!`;
+                
+                // Desenhar imagem no canvas para captura posterior
+                var reader = new FileReader();
+                reader.onload = function(event) {
+                    var img = new Image();
+                    img.onload = function() {
+                        // Verificar se canvas ainda existe
+                        if (!canvas) {
+                            console.log('❌ Canvas foi removido do DOM!');
+                            return;
+                        }
+                        
+                        // Mostrar o canvas
+                        canvas.style.display = 'block';
+                        canvas.width = Math.min(img.width, 800); // Máximo 800px de largura
+                        canvas.height = (canvas.width / img.width) * img.height;
+                        
+                        var ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        
+                        console.log('✅ Imagem de consumo carregada no canvas:', canvas.width, 'x', canvas.height);
+                        
+                        // SALVAR IMAGEM EM VARIÁVEL GLOBAL IMEDIATAMENTE
+                        globalImageConsumo = canvas.toDataURL('image/jpeg', 0.8);
+                        imageTimestamps.consumo = Date.now();
+                        
+                        console.log('💾 Imagem de CONSUMO salva globalmente:', globalImageConsumo.length, 'caracteres');
+                        console.log('⏰ Timestamp consumo:', imageTimestamps.consumo);
+                        
+                        // Marcar que a imagem foi carregada
+                        canvas.setAttribute('data-image-loaded', 'true');
+                        canvas.setAttribute('data-load-timestamp', Date.now());
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                preview.className = 'file-preview';
+                // NÃO sobrescrever innerHTML - apenas atualizar o texto, preservando o canvas
+                const span = preview.querySelector('span');
+                if (span) {
+                    span.textContent = '📷 Nenhuma foto capturada';
+                } else {
+                    // Se não existe span, criar um sem remover o canvas
+                    const newSpan = document.createElement('span');
+                    newSpan.textContent = '📷 Nenhuma foto capturada';
+                    preview.insertBefore(newSpan, preview.firstChild);
+                }
+                canvas.style.display = 'none';
+                
+                // Limpar marcadores de imagem carregada
+                canvas.removeAttribute('data-image-loaded');
+                canvas.removeAttribute('data-load-timestamp');
+                
+                // LIMPAR VARIÁVEL GLOBAL DE CONSUMO
+                globalImageConsumo = null;
+                imageTimestamps.consumo = null;
+                console.log('🗑️ Imagem de CONSUMO removida das variáveis globais');
+            }
         }
 
         function doNextPhase() {
             // Esta função não é mais necessária, mas mantida para compatibilidade
             // O fluxo agora é automático na função doSaveTemperature
             doShowMain();
+        }
+
+        // ✅ FUNÇÃO DE DEBUG PARA TESTAR ANEXOS
+        function debugFileInput(inputId) {
+            console.log(`🔍 === DEBUG ${inputId} ===`);
+            
+            const fileInput = document.getElementById(inputId);
+            const preview = document.getElementById(inputId === 'fileRetirada' ? 'previewRetirada' : 'previewConsumo');
+            const canvas = document.getElementById(inputId === 'fileRetirada' ? 'canvasRetirada' : 'canvasConsumo');
+            
+            console.log('📋 Elementos encontrados:');
+            console.log('   - Input:', !!fileInput, fileInput);
+            console.log('   - Preview:', !!preview, preview);
+            console.log('   - Canvas:', !!canvas, canvas);
+            
+            if (fileInput) {
+                console.log('📁 Files:', fileInput.files.length, fileInput.files);
+                console.log('📎 Event listeners:', fileInput.getEventListeners ? fileInput.getEventListeners() : 'Não disponível');
+            }
+            
+            // Testar variáveis globais
+            console.log('🌐 Variáveis globais:');
+            console.log('   - globalImageRetirada:', !!globalImageRetirada, globalImageRetirada ? `(${globalImageRetirada.length} chars)` : '');
+            console.log('   - globalImageConsumo:', !!globalImageConsumo, globalImageConsumo ? `(${globalImageConsumo.length} chars)` : '');
+            console.log('   - imageTimestamps:', imageTimestamps);
+            
+            alert(`🔍 Debug de ${inputId}:\n\n` +
+                  `Input encontrado: ${!!fileInput}\n` +
+                  `Preview encontrado: ${!!preview}\n` +
+                  `Canvas encontrado: ${!!canvas}\n` +
+                  `Arquivos carregados: ${fileInput ? fileInput.files.length : 0}\n` +
+                  `Imagem global: ${inputId === 'fileRetirada' ? !!globalImageRetirada : !!globalImageConsumo}\n\n` +
+                  `Verifique o console para mais detalhes.`);
         }
 
         function doTakePhoto() {
@@ -5533,23 +5583,57 @@ var templateParams = {
 
         // Função para preencher automaticamente os campos com dados do líder
         function preencherCamposAutomaticamente() {
-            if (window.dadosOrganograma && window.dadosOrganograma.length > 0) {
-                const liderNome = window.dadosOrganograma[0].LIDER || '';
+            let liderNome = '';
+            
+            // 🎯 PRIORIDADE 1: Buscar líder na lista de colaboradores da equipe específica
+            if (window.dadosColaboradores && window.dadosColaboradores.length > 0) {
+                const liderColaborador = window.dadosColaboradores.find(colab => 
+                    colab.IS_LIDER === true || colab.CLASSE === 'LDF'
+                );
+                
+                if (liderColaborador && liderColaborador.NOME) {
+                    liderNome = liderColaborador.NOME;
+                    console.log(`🎯 Líder encontrado nos colaboradores da equipe: "${liderNome}"`);
+                } else {
+                    console.log(`⚠️ Nenhum líder encontrado nos colaboradores da equipe`);
+                }
+            }
+            
+            // 🎯 FALLBACK: Se não encontrou líder nos colaboradores, usar organograma
+            if (!liderNome && window.dadosOrganograma && window.dadosOrganograma.length > 0) {
+                // Buscar o organograma da equipe específica se possível
+                const equipeLogada = localStorage.getItem('equipe_logada') || '';
+                let organogramaEquipe = null;
+                
+                if (equipeLogada) {
+                    organogramaEquipe = window.dadosOrganograma.find(org => org.EQUIPE === equipeLogada);
+                }
+                
+                // Se não encontrou da equipe específica, usar o primeiro do projeto
+                const dadosOrg = organogramaEquipe || window.dadosOrganograma[0];
+                liderNome = dadosOrg.LIDER || '';
+                console.log(`🔄 Fallback: líder encontrado no organograma: "${liderNome}" (equipe: ${dadosOrg.EQUIPE || 'N/A'})`);
+            }
+            
+            if (liderNome) {
                 console.log(`� Preenchimento automático: líder encontrado: "${liderNome}"`);
                 
                 // Preencher Nome do Solicitante com o nome do líder (mas permite editar)
                 const requestorInput = document.getElementById('requestorNameInput');
                 if (requestorInput && !requestorInput.value.trim()) {
                     requestorInput.value = liderNome;
-                    console.log(`✅ Nome do Solicitante preenchido`);
+                    console.log(`✅ Nome do Solicitante preenchido com: "${liderNome}"`);
                 }
                 
                 // Preencher Responsável pelo Cartão com o nome do líder (mas permite editar)
                 const cardResponsibleInput = document.getElementById('cardResponsibleInput');
                 if (cardResponsibleInput && !cardResponsibleInput.value.trim()) {
                     cardResponsibleInput.value = liderNome;
-                    console.log(`✅ Responsável pelo Cartão preenchido`);
+                    console.log(`✅ Responsável pelo Cartão preenchido com: "${liderNome}"`);
                 }
+            } else {
+                console.log(`⚠️ Nenhum líder encontrado para preenchimento automático`);
+            }
                 
                 // Preencher PAGCORP se disponível
                 if (window.dadosPagcorp && window.dadosPagcorp.length > 0) {
@@ -5567,9 +5651,6 @@ var templateParams = {
                 } else {
                     console.log('ℹ️ Nenhum PAGCORP encontrado');
                 }
-            } else {
-                console.log('⚠️ Dados do organograma não disponíveis para preenchimento automático');
-            }
         }
 
         // Função para buscar PAGCORP automaticamente quando o responsável pelo cartão é alterado
@@ -5677,7 +5758,7 @@ var templateParams = {
                 // Fazer chamadas paralelas para fornecedores, organograma e colaboradores
                 const [fornecedoresResponse, organogramaResponse, colaboradoresResponse] = await Promise.all([
                     fetch(`${getServerBaseUrl()}/api/fornecedores?projeto=${projeto}`),
-                    fetch(`${getServerBaseUrl()}/api/organograma?projeto=${projeto}`),
+                    fetch(`${getServerBaseUrl()}/api/organograma?projeto=${projeto}&equipe=${equipe}`),
                     fetch(`${getServerBaseUrl()}/api/colaboradores?equipe=${equipe}`)
                 ]);
                 
