@@ -6458,10 +6458,35 @@ var templateParams = {
                 let nomeLiderOrganograma = ''; // Nome do líder do organograma
                 
                 if (window.dadosOrganograma && window.dadosOrganograma.length > 0) {
-                    const orgData = window.dadosOrganograma[0]; // Primeiro registro
-                    coordenador = orgData.COORDENADOR || '';
-                    supervisor = orgData.SUPERVISOR || '';
-                    nomeLiderOrganograma = orgData.LIDER || ''; // Nome do líder
+                    console.log(`🔍 Buscando no organograma pela equipe: "${equipe}"`);
+                    console.log(`📊 Total registros no organograma: ${window.dadosOrganograma.length}`);
+                    
+                    // Buscar especificamente pela equipe digitada
+                    const orgData = window.dadosOrganograma.find(org => 
+                        org.EQUIPE && org.EQUIPE.toString().trim() === equipe.toString().trim()
+                    );
+                    
+                    if (orgData) {
+                        coordenador = orgData.COORDENADOR || '';
+                        supervisor = orgData.SUPERVISOR || '';
+                        nomeLiderOrganograma = orgData.LIDER || '';
+                        console.log(`✅ Organograma encontrado para equipe "${equipe}":`);
+                        console.log(`   COORDENADOR: "${coordenador}"`);
+                        console.log(`   SUPERVISOR: "${supervisor}"`);
+                        console.log(`   NOME_LIDER: "${nomeLiderOrganograma}"`);
+                    } else {
+                        console.log(`⚠️ Organograma não encontrado para equipe "${equipe}"`);
+                        console.log(`📋 Equipes disponíveis:`, window.dadosOrganograma.map(org => org.EQUIPE));
+                        
+                        // Fallback para o primeiro registro se não encontrar pela equipe
+                        const orgDataFallback = window.dadosOrganograma[0];
+                        coordenador = orgDataFallback.COORDENADOR || '';
+                        supervisor = orgDataFallback.SUPERVISOR || '';
+                        nomeLiderOrganograma = orgDataFallback.LIDER || '';
+                        console.log(`🔄 Usando fallback (primeiro registro do organograma)`);
+                    }
+                } else {
+                    console.log(`⚠️ Nenhum dado de organograma disponível`);
                 }
                 
                 // Buscar FAZENDA da tabela de fornecedores
