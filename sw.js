@@ -84,10 +84,10 @@ self.addEventListener('install', event => {
             .catch(err => console.log('❌ Erro no cache:', err))
     );
     
-    // Para iOS PWAs, força ativação imediata
+    // Para iOS PWAs, aguardar ativação manual (não forçar)
     if (isIOS) {
-        console.log('🍎 iOS detectado - forçando ativação');
-        self.skipWaiting();
+        console.log('🍎 iOS detectado - Service Worker instalado (aguardando ativação)');
+        // Removido self.skipWaiting() para evitar recargas automáticas
     }
 });
 
@@ -105,8 +105,8 @@ self.addEventListener('activate', event => {
                 })
             );
         }).then(() => {
-            // Toma controle imediato de todas as páginas
-            console.log('🎯 Service Worker assumindo controle das páginas');
+            // Toma controle suave das páginas (sem forçar reload)
+            console.log('🎯 Service Worker assumindo controle suave das páginas');
             return self.clients.claim();
         })
     );

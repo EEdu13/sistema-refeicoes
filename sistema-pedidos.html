@@ -5120,9 +5120,18 @@ var templateParams = {
                     });
                     console.log('✅ Service Worker registrado:', swRegistration);
                     
-                    // Forçar atualização do Service Worker
-                    await swRegistration.update();
-                    console.log('🔄 Service Worker atualizado');
+                    // Verificar se há atualizações disponíveis (sem forçar)
+                    swRegistration.addEventListener('updatefound', () => {
+                        console.log('🔄 Nova versão do Service Worker encontrada');
+                        const newWorker = swRegistration.installing;
+                        if (newWorker) {
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    console.log('✨ Nova versão instalada (será ativada na próxima abertura)');
+                                }
+                            });
+                        }
+                    });
                     
                     // Solicitar permissão para notificações
                     if ('Notification' in window) {
@@ -5401,7 +5410,37 @@ var templateParams = {
             // Atualizar nome do usuário
             atualizarNomeUsuario(equipe);
             
-            // Buscar dados (tentará usar cache se offline)
+            // Verificar se tem dados em cache primeiro (para modo offline)
+            const dadosCache = localStorage.getItem('dadosApiCache');
+            const isOnline = navigator.onLine;
+            
+            console.log(`📶 Status da rede: ${isOnline ? 'Online' : 'Offline'}`);
+            
+            if (!isOnline && dadosCache) {
+                console.log('📦 Usando dados em cache (modo offline)');
+                const cache = JSON.parse(dadosCache);
+                
+                // Usar dados do cache para interface
+                if (cache.fornecedores) {
+                    carregarFornecedoresNaInterface(cache.fornecedores);
+                }
+                if (cache.colaboradores) {
+                    carregarColaboradoresNaInterface(cache.colaboradores);
+                }
+                
+                // Carregar pendências do cache se disponível
+                const pendenciasCache = localStorage.getItem('temperaturePendenciasCache');
+                if (pendenciasCache) {
+                    const pendencias = JSON.parse(pendenciasCache);
+                    carregarPendenciasNaInterface(pendencias);
+                    console.log('✅ Login automático concluído (modo offline)');
+                } else {
+                    console.log('⚠️ Sem pendências em cache - aguardando conexão');
+                }
+                return true;
+            }
+            
+            // Se online, buscar dados do servidor (comportamento normal)
             const sucesso = await buscarDadosPorProjetoEquipe(projeto, equipe);
             
             if (sucesso) {
@@ -5455,6 +5494,18 @@ var templateParams = {
             
             // INICIALIZAÇÃO DO SISTEMA OFFLINE
             console.log('🚀 Inicializando sistema offline...');
+            
+            // Verificar se há dados em cache para modo offline
+            const cacheOfflineData = localStorage.getItem('dadosApiCache');
+            const loginSalvo = localStorage.getItem('loginData');
+            
+            if (cacheOfflineData && loginSalvo) {
+                console.log('💾 Dados offline encontrados - sistema pode funcionar offline');
+                // Sistema já tem dados cached, pode funcionar offline
+            } else {
+                console.log('⚠️ Sistema precisa de conexão inicial para cache de dados');
+            }
+            
             loadEmailQueue();
             updateDatabaseQueueCounter(); // Carregar contador do banco de dados
             
