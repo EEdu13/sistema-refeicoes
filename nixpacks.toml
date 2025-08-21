@@ -1,8 +1,7 @@
-[providers]
-python = "3.11"
+providers = ["python"]
 
 [phases.setup]
-aptPkgs = ["curl", "gnupg2", "python3", "python3-pip"]
+aptPkgs = ["curl", "gnupg2"]
 
 [phases.install]
 cmds = [
