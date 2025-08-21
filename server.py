@@ -495,28 +495,28 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 query = """
                 SELECT ID, DATA_RETIRADA, NOME_LIDER, TIPO_REFEICAO, FORNECEDOR, 
                        TOTAL_COLABORADORES, TOTAL_PAGAR, DATA_ENVIO1, LIDER,
-                       TEMP_RETIRADA, TEMP_CONSUMO, AFERIU_TEMPERATURA
+                       TEMP_RETIRADA, TEMP_CONSUMO
                 FROM PEDIDOS 
                 WHERE (TIPO_REFEICAO LIKE '%MARMITEX%' OR TIPO_REFEICAO LIKE '%MARMITA%')
-                  AND (AFERIU_TEMPERATURA IS NULL OR AFERIU_TEMPERATURA = '')
+                  AND (TEMP_RETIRADA IS NULL OR TEMP_RETIRADA = '' OR TEMP_CONSUMO IS NULL OR TEMP_CONSUMO = '')
                   AND LIDER = %s
                 ORDER BY DATA_ENVIO1 DESC
                 """
                 query_params_db = [equipe_param]
-                print(f"🔍 Query com filtro AFERIU_TEMPERATURA (campo LIDER): {equipe_param}")
+                print(f"🔍 Query para equipe específica: {equipe_param}")
             else:
                 # Query sem filtro de equipe (comportamento original)
                 query = """
                 SELECT ID, DATA_RETIRADA, NOME_LIDER, TIPO_REFEICAO, FORNECEDOR, 
                        TOTAL_COLABORADORES, TOTAL_PAGAR, DATA_ENVIO1, LIDER,
-                       TEMP_RETIRADA, TEMP_CONSUMO, AFERIU_TEMPERATURA
+                       TEMP_RETIRADA, TEMP_CONSUMO
                 FROM PEDIDOS 
                 WHERE (TIPO_REFEICAO LIKE '%MARMITEX%' OR TIPO_REFEICAO LIKE '%MARMITA%')
-                  AND (AFERIU_TEMPERATURA IS NULL OR AFERIU_TEMPERATURA = '')
+                  AND (TEMP_RETIRADA IS NULL OR TEMP_RETIRADA = '' OR TEMP_CONSUMO IS NULL OR TEMP_CONSUMO = '')
                 ORDER BY DATA_ENVIO1 DESC
                 """
                 query_params_db = []
-                print("🔍 Query com filtro AFERIU_TEMPERATURA (todas as equipes)")
+                print("🔍 Query para todas as equipes")
             
             try:
                 pedidos_pendentes = executar_query(query, query_params_db)
@@ -781,15 +781,15 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 else:
                     print("⚠️ Não foi possível obter estrutura da tabela")
                 
-                # Query COMPLETA com todos os campos disponíveis + APROVADO_POR + FECHAMENTO + AFERIU_TEMPERATURA
+                # Query COMPLETA com todos os campos disponíveis + APROVADO_POR + FECHAMENTO
                 query = """
                 INSERT INTO PEDIDOS (
                     DATA_RETIRADA, DATA_ENVIO1, PROJETO, COORDENADOR, SUPERVISOR, 
                     LIDER, NOME_LIDER, FAZENDA, TIPO_REFEICAO, CIDADE_PRESTACAO_DO_SERVICO,
                     FORNECEDOR, VALOR_PAGO, COLABORADORES, TOTAL_COLABORADORES, A_CONTRATAR,
                     RESPONSAVEL_PELO_CARTAO, PAGCORP, HOSPEDADO, NOME_DO_HOTEL, VALOR_DIARIA,
-                    TOTAL_PAGAR, APROVADO_POR, OBSERVACOES, FECHAMENTO, AFERIU_TEMPERATURA
-                ) VALUES (%s, DATEADD(hour, -6, GETUTCDATE()), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    TOTAL_PAGAR, APROVADO_POR, OBSERVACOES, FECHAMENTO
+                ) VALUES (%s, DATEADD(hour, -6, GETUTCDATE()), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 
                 # Extrair TODOS os dados do pedido com MAPEAMENTO CORRETO
@@ -845,16 +845,6 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 
                 observacoes = pedido_data.get('observacoes', '')
                 
-                # 🎯 NOVA LÓGICA: AFERIU_TEMPERATURA baseado no tipo de refeição
-                if 'MARMITEX' in tipo_refeicao.upper() or 'MARMITA' in tipo_refeicao.upper():
-                    aferiu_temperatura = None  # NULL para MARMITEX (precisa de aferição)
-                    print(f"🌡️ Tipo MARMITEX detectado - AFERIU_TEMPERATURA será NULL (precisa aferição)")
-                else:
-                    aferiu_temperatura = 'NÃO NECESSITA'  # Para outros tipos
-                    print(f"🚫 Tipo NÃO-MARMITEX detectado - AFERIU_TEMPERATURA = 'NÃO NECESSITA'")
-                
-                print(f"📋 AFERIU_TEMPERATURA definido como: {aferiu_temperatura}")
-                
                 # Calcular total a pagar: APENAS VALOR_PAGO × TOTAL_COLABORADORES (SEM DIÁRIA)
                 total_pessoas = total_colaboradores  # Já inclui selecionados + a_contratar + outros
                 total_refeicao = valor_pago * total_pessoas
@@ -885,7 +875,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     fazenda, tipo_refeicao, cidade, fornecedor, valor_pago, 
                     colaboradores_nomes, total_colaboradores, a_contratar,
                     responsavel_cartao, pagcorp, hospedado, nome_hotel, valor_diaria,
-                    total_pagar, aprovado_por, observacoes, fechamento, aferiu_temperatura
+                    total_pagar, aprovado_por, observacoes, fechamento
                 ])
                 
                 if resultado is not None and isinstance(resultado, dict) and 'inserted_id' in resultado:
@@ -1085,7 +1075,6 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     TEMPERATURA_CONSUMO = %s,
                     HORA_RETIRADA = %s,
                     HORA_CONSUMO = %s,
-                    AFERIU_TEMPERATURA = 'SIM',
                     OBSERVACOES_TEMP = %s
                 WHERE ID = %s
                 """
