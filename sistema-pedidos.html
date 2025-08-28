@@ -4491,12 +4491,19 @@
             document.getElementById('dataProblemaPopup').value = data;
             
             // Popular fornecedores do projeto
+            console.log('🏪 Chamando função para popular fornecedores...');
             popularFornecedoresProblema();
             
             // Limpar campos
             document.getElementById('fornecedorProblemaPopup').value = '';
-            document.getElementById('fornecedorProblemaPopupCustom').value = '';
-            document.getElementById('fornecedorProblemaPopupCustom').style.display = 'none';
+            
+            // Verificar se o campo custom existe antes de limpar
+            const customField = document.getElementById('fornecedorProblemaPopupCustom');
+            if (customField) {
+                customField.value = '';
+                customField.style.display = 'none';
+            }
+            
             document.getElementById('observacaoProblemaPopup').value = '';
             document.getElementById('foto1Popup').value = '';
             document.getElementById('foto2Popup').value = '';
@@ -4554,8 +4561,14 @@
 
         // Função para popular fornecedores no popup de problema
         function popularFornecedoresProblema() {
+            console.log('🏪 Iniciando população de fornecedores no popup de problema...');
             const select = document.getElementById('fornecedorProblemaPopup');
-            if (!select) return;
+            if (!select) {
+                console.log('❌ Select de fornecedor não encontrado!');
+                return;
+            }
+            
+            console.log('✅ Select encontrado, populando fornecedores...');
             
             // Limpar opções antigas (manter apenas as padrões)
             while (select.children.length > 2) {
@@ -4565,6 +4578,7 @@
             // Adicionar fornecedores do projeto
             if (window.dadosFornecedores && window.dadosFornecedores.length > 0) {
                 console.log(`🏪 Populando ${window.dadosFornecedores.length} fornecedores no popup de problema`);
+                console.log('🏪 Fornecedores disponíveis:', window.dadosFornecedores);
                 
                 window.dadosFornecedores.forEach(fornecedor => {
                     const option = document.createElement('option');
@@ -4573,9 +4587,13 @@
                     
                     // Inserir antes da opção "Outro fornecedor"
                     select.insertBefore(option, select.lastElementChild);
+                    console.log(`➕ Adicionado fornecedor: ${option.textContent}`);
                 });
+                
+                console.log(`✅ ${window.dadosFornecedores.length} fornecedores adicionados com sucesso!`);
             } else {
                 console.log('⚠️ Nenhum fornecedor disponível para popular no popup');
+                console.log('🔍 window.dadosFornecedores:', window.dadosFornecedores);
             }
         }
 
