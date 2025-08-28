@@ -4584,21 +4584,32 @@
                 console.log(`🏪 Populando ${window.dadosFornecedores.length} fornecedores no popup de problema`);
                 console.log('🏪 Fornecedores disponíveis:', window.dadosFornecedores);
                 
+                // 🎯 CRIAR LISTA ÚNICA DE FORNECEDORES (sem duplicatas)
+                const fornecedoresUnicos = new Set();
+                
                 window.dadosFornecedores.forEach((fornecedor, index) => {
                     console.log(`🔍 Fornecedor ${index}:`, fornecedor);
                     
-                    const option = document.createElement('option');
                     // 🎯 CORRETO: usar FORNECEDOR em vez de NOME
                     const nomeFornecedor = fornecedor.FORNECEDOR || fornecedor.NOME || fornecedor.nome || fornecedor;
-                    option.value = nomeFornecedor;
-                    option.textContent = nomeFornecedor;
                     
-                    // Inserir antes da opção "Outro fornecedor"
-                    select.insertBefore(option, select.lastElementChild);
-                    console.log(`➕ Adicionado fornecedor: ${option.textContent}`);
+                    // Adicionar apenas se não existir (evita duplicatas)
+                    if (nomeFornecedor && !fornecedoresUnicos.has(nomeFornecedor)) {
+                        fornecedoresUnicos.add(nomeFornecedor);
+                        
+                        const option = document.createElement('option');
+                        option.value = nomeFornecedor;
+                        option.textContent = nomeFornecedor;
+                        
+                        // Inserir antes da opção "Outro fornecedor"
+                        select.insertBefore(option, select.lastElementChild);
+                        console.log(`➕ Adicionado fornecedor único: ${option.textContent}`);
+                    } else {
+                        console.log(`⏭️ Fornecedor duplicado ignorado: ${nomeFornecedor}`);
+                    }
                 });
                 
-                console.log(`✅ ${window.dadosFornecedores.length} fornecedores adicionados com sucesso!`);
+                console.log(`✅ ${fornecedoresUnicos.size} fornecedores únicos adicionados com sucesso!`);
             } else {
                 console.log('⚠️ Nenhum fornecedor disponível para popular no popup');
                 console.log('🔍 window.dadosFornecedores atual:', window.dadosFornecedores);
@@ -4615,14 +4626,23 @@
                             console.log('🚀 Usando fornecedores do cache...');
                             window.dadosFornecedores = cache.fornecedores;
                             
+                            // 🎯 CRIAR LISTA ÚNICA DE FORNECEDORES DO CACHE (sem duplicatas)
+                            const fornecedoresUnicos = new Set();
+                            
                             cache.fornecedores.forEach((fornecedor, index) => {
-                                const option = document.createElement('option');
                                 // 🎯 CORRETO: usar FORNECEDOR em vez de NOME
                                 const nomeFornecedor = fornecedor.FORNECEDOR || fornecedor.NOME || fornecedor.nome || fornecedor;
-                                option.value = nomeFornecedor;
-                                option.textContent = nomeFornecedor;
-                                select.insertBefore(option, select.lastElementChild);
-                                console.log(`➕ Adicionado do cache: ${option.textContent}`);
+                                
+                                // Adicionar apenas se não existir (evita duplicatas)
+                                if (nomeFornecedor && !fornecedoresUnicos.has(nomeFornecedor)) {
+                                    fornecedoresUnicos.add(nomeFornecedor);
+                                    
+                                    const option = document.createElement('option');
+                                    option.value = nomeFornecedor;
+                                    option.textContent = nomeFornecedor;
+                                    select.insertBefore(option, select.lastElementChild);
+                                    console.log(`➕ Adicionado do cache (único): ${option.textContent}`);
+                                }
                             });
                         }
                     } else {
@@ -6079,7 +6099,7 @@ var templateParams = {
                 if (window.dadosOrganograma && window.dadosOrganograma.length > 0) {
                     const liderNome = window.dadosOrganograma[0].LIDER || '';
                     if (liderNome.trim()) {
-                        nomeUsuario = liderNome;
+                        nomeUsuario = `👤 ${liderNome} (${equipe})`;
                     }
                 }
                 
@@ -6088,6 +6108,8 @@ var templateParams = {
                 if (nomeElement) {
                     nomeElement.textContent = nomeUsuario;
                     console.log('👤 Nome do usuário atualizado:', nomeUsuario);
+                } else {
+                    console.log('⚠️ Elemento nomeUsuario não encontrado');
                 }
                 
                 // Salvar no localStorage para persistir
@@ -6484,6 +6506,10 @@ var templateParams = {
                 
                 // Popular colaboradores na interface
                 popularColaboradores(window.dadosColaboradores);
+                
+                // 👤 ATUALIZAR NOME DO USUÁRIO COM DADOS DO ORGANOGRAMA
+                const equipeAtual = localStorage.getItem('equipe_logada') || equipe;
+                atualizarNomeUsuario(equipeAtual);
                 
                 // Mostrar dados no console
                 console.log('Fornecedores:', window.dadosFornecedores);
