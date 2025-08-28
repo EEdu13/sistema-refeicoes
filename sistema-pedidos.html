@@ -1771,6 +1771,16 @@
 
         <!-- Tela de Login -->
         <div id="loginScreen" class="login-screen">
+            <!-- Indicador de Login Salvo -->
+            <div id="loginSalvoIndicador" style="display: none; background: #e7f3ff; border: 1px solid #b8daff; border-radius: 8px; padding: 12px; margin-bottom: 20px; text-align: center;">
+                <div style="color: #0066cc; font-size: 14px; font-weight: 500;">
+                    🔐 Login Salvo Encontrado
+                </div>
+                <div id="loginSalvoInfo" style="color: #0066cc; font-size: 12px; margin-top: 4px;">
+                    Carregando automaticamente...
+                </div>
+            </div>
+            
             <div class="form-group">
                 <label for="equipeInput">Digite sua EQUIPE:</label>
                 <input type="text" class="form-control" id="equipeInput" placeholder="Ex: 700TA" autocomplete="off" onkeypress="if(event.key==='Enter') loginEquipe()">
@@ -3778,6 +3788,17 @@
         document.addEventListener('DOMContentLoaded', async function() {
             console.log('🚀 Inicializando sistema...');
             
+            // ⭐ PRIMEIRA PRIORIDADE: Verificar login salvo ANTES de qualquer coisa
+            console.log('🔍 Verificando login salvo no DOMContentLoaded...');
+            const loginEncontrado = await verificarLoginSalvo();
+            
+            if (!loginEncontrado) {
+                console.log('👤 Nenhum login salvo encontrado, mostrando tela de login');
+                // Garantir que a tela de login esteja visível
+                document.getElementById('loginScreen').classList.remove('hidden');
+                document.getElementById('mainScreen').classList.add('hidden');
+            }
+            
             // Carregar configurações do servidor primeiro
             await carregarConfiguracoes();
             
@@ -5404,15 +5425,27 @@ var templateParams = {
                         console.log(`👤 Usuário: ${dados.projeto}-${dados.equipe}`);
                         console.log(`🕐 Login salvo há: ${Math.round((agora - dados.timestamp) / (1000 * 60 * 60))} horas`);
                         
+                        // 🔐 MOSTRAR INDICADOR DE LOGIN SALVO
+                        const indicador = document.getElementById('loginSalvoIndicador');
+                        const info = document.getElementById('loginSalvoInfo');
+                        if (indicador && info) {
+                            indicador.style.display = 'block';
+                            info.textContent = `Equipe: ${dados.equipe} (${fonte})`;
+                        }
+                        
                         // Restaurar em TODAS as fontes de persistência
                         salvarLogin(dados.projeto, dados.equipe);
                         
                         // Preencher campos
-                        document.getElementById('projetoInput').value = dados.projeto;
-                        document.getElementById('equipeInput').value = dados.equipe;
+                        if (document.getElementById('projetoInput')) {
+                            document.getElementById('projetoInput').value = dados.projeto;
+                        }
+                        if (document.getElementById('equipeInput')) {
+                            document.getElementById('equipeInput').value = dados.equipe;
+                        }
                         
                         // Fazer login automático
-                        fazerLoginAutomatico(dados.projeto, dados.equipe);
+                        await fazerLoginAutomatico(dados.projeto, dados.equipe);
                         return true;
                     } else {
                         console.log('⏰ Login expirado, removendo de todas as fontes...');
@@ -5534,62 +5567,79 @@ var templateParams = {
         
         async function fazerLoginAutomatico(projeto, equipe) {
             console.log('🔄 Fazendo login automático...');
+            console.log(`👤 Projeto: ${projeto}, Equipe: ${equipe}`);
             
-            // Mostrar tela principal
-            document.getElementById('loginScreen').classList.add('hidden');
-            document.getElementById('mainScreen').classList.remove('hidden');
-            
-            // Atualizar nome do usuário
-            atualizarNomeUsuario(equipe);
-            
-            // Verificar se tem dados em cache primeiro (para modo offline)
-            const dadosCache = localStorage.getItem('dadosApiCache');
-            const isOnline = navigator.onLine;
-            
-            console.log(`📶 Status da rede: ${isOnline ? 'Online' : 'Offline'}`);
-            
-            if (!isOnline && dadosCache) {
-                console.log('📦 Usando dados em cache (modo offline)');
-                const cache = JSON.parse(dadosCache);
+            try {
+                // Mostrar tela principal
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('mainScreen').classList.remove('hidden');
                 
-                // Usar dados do cache para interface
-                if (cache.fornecedores) {
-                    carregarFornecedoresNaInterface(cache.fornecedores);
-                }
-                if (cache.colaboradores) {
-                    carregarColaboradoresNaInterface(cache.colaboradores);
+                // Atualizar nome do usuário
+                atualizarNomeUsuario(equipe);
+                
+                // Verificar se tem dados em cache primeiro (para modo offline)
+                const dadosCache = localStorage.getItem('dadosApiCache');
+                const isOnline = navigator.onLine;
+                
+                console.log(`📶 Status da rede: ${isOnline ? 'Online' : 'Offline'}`);
+                
+                if (!isOnline && dadosCache) {
+                    console.log('📦 Usando dados em cache (modo offline)');
+                    const cache = JSON.parse(dadosCache);
+                    
+                    // Usar dados do cache para interface
+                    if (cache.fornecedores) {
+                        carregarFornecedoresNaInterface(cache.fornecedores);
+                    }
+                    if (cache.colaboradores) {
+                        carregarColaboradoresNaInterface(cache.colaboradores);
+                    }
+                    
+                    // Carregar pendências do cache se disponível
+                    const pendenciasCache = localStorage.getItem('temperaturePendenciasCache');
+                    if (pendenciasCache) {
+                        const pendencias = JSON.parse(pendenciasCache);
+                        carregarPendenciasNaInterface(pendencias);
+                        console.log('✅ Login automático concluído (modo offline)');
+                    } else {
+                        console.log('⚠️ Sem pendências em cache - aguardando conexão');
+                    }
+                    
+                    // Carregar pendências de temperatura
+                    await loadPendingTemperatures();
+                    updateSyncStatus();
+                    return true;
                 }
                 
-                // Carregar pendências do cache se disponível
-                const pendenciasCache = localStorage.getItem('temperaturePendenciasCache');
-                if (pendenciasCache) {
-                    const pendencias = JSON.parse(pendenciasCache);
-                    carregarPendenciasNaInterface(pendencias);
-                    console.log('✅ Login automático concluído (modo offline)');
+                // Se online, buscar dados do servidor (comportamento normal)
+                const sucesso = await buscarDadosPorProjetoEquipe(projeto, equipe);
+                
+                if (sucesso) {
+                    // Carregar pendências de temperatura
+                    await loadPendingTemperatures();
+                    updateSyncStatus();
+                    console.log('✅ Login automático concluído (online)');
+                    return true;
                 } else {
-                    console.log('⚠️ Sem pendências em cache - aguardando conexão');
+                    console.log('❌ Falha no login automático, mas mantendo acesso (modo gracioso)');
+                    // Em vez de voltar para login, manter logado mas mostrar mensagem
+                    await loadPendingTemperatures();
+                    updateSyncStatus();
+                    return true; // Manter logado mesmo com falha na API
                 }
-                return true;
-            }
-            
-            // Se online, buscar dados do servidor (comportamento normal)
-            const sucesso = await buscarDadosPorProjetoEquipe(projeto, equipe);
-            
-            if (sucesso) {
-                // Carregar pendências de temperatura
+            } catch (error) {
+                console.error('❌ Erro durante login automático:', error);
+                console.log('⚠️ Mantendo usuário logado apesar do erro');
+                // Carregar pelo menos as pendências locais
                 await loadPendingTemperatures();
-                console.log('✅ Login automático concluído');
-            } else {
-                console.log('❌ Falha no login automático, voltando para tela de login');
-                document.getElementById('loginScreen').classList.remove('hidden');
-                document.getElementById('mainScreen').classList.add('hidden');
+                updateSyncStatus();
+                return true; // Manter logado mesmo com erro
             }
         }
 
         // Inicialização do sistema offline e login por equipe
         window.addEventListener('load', async function() {
-            // Verificar se há login salvo
-            await verificarLoginSalvo();
+            console.log('🌐 Window load completado');
             
             // CONFIGURAÇÃO ESPECÍFICA PARA iOS
             setupIOSOfflineSystem();
@@ -5601,6 +5651,22 @@ var templateParams = {
             window.addEventListener('beforeunload', function(event) {
                 console.log('⚠️ App sendo fechado - ativando background sync');
                 scheduleBackgroundSync();
+                
+                // 💾 FORÇAR PERSISTÊNCIA DO LOGIN ANTES DE FECHAR
+                const equipeLogada = localStorage.getItem('equipe_logada');
+                const loginData = localStorage.getItem('loginData');
+                
+                if (equipeLogada && loginData) {
+                    console.log('💾 Garantindo persistência do login antes de fechar...');
+                    try {
+                        const dados = JSON.parse(loginData);
+                        // Resalvar com timestamp atualizado
+                        salvarLogin(dados.projeto, dados.equipe);
+                        console.log('✅ Login persistido com sucesso');
+                    } catch (error) {
+                        console.error('❌ Erro ao persistir login:', error);
+                    }
+                }
                 
                 // Para PWAs, forçar sync imediato
                 if (navigator.serviceWorker.controller) {
@@ -5615,6 +5681,20 @@ var templateParams = {
                 if (document.visibilityState === 'hidden') {
                     console.log('👁️ App minimizado - ativando background sync');
                     scheduleBackgroundSync();
+                    
+                    // 💾 PERSISTIR LOGIN QUANDO APP VAI PARA BACKGROUND
+                    const equipeLogada = localStorage.getItem('equipe_logada');
+                    const loginData = localStorage.getItem('loginData');
+                    
+                    if (equipeLogada && loginData) {
+                        console.log('💾 Persistindo login (app em background)...');
+                        try {
+                            const dados = JSON.parse(loginData);
+                            salvarLogin(dados.projeto, dados.equipe);
+                        } catch (error) {
+                            console.error('❌ Erro ao persistir login (background):', error);
+                        }
+                    }
                 }
             });
             
@@ -5622,6 +5702,20 @@ var templateParams = {
             window.addEventListener('pagehide', function(event) {
                 console.log('📱 App saindo de foco - ativando background sync');
                 scheduleBackgroundSync();
+                
+                // 💾 PERSISTIR LOGIN PARA iOS/SAFARI PWA
+                const equipeLogada = localStorage.getItem('equipe_logada');
+                const loginData = localStorage.getItem('loginData');
+                
+                if (equipeLogada && loginData) {
+                    console.log('💾 Persistindo login (iOS/Safari)...');
+                    try {
+                        const dados = JSON.parse(loginData);
+                        salvarLogin(dados.projeto, dados.equipe);
+                    } catch (error) {
+                        console.error('❌ Erro ao persistir login (iOS):', error);
+                    }
+                }
             });
             
             // INICIALIZAÇÃO DO SISTEMA OFFLINE
@@ -5730,47 +5824,93 @@ var templateParams = {
 
         // Função para limpar cache completo (PWA)
         function limparCacheCompleto() {
-            if (confirm('🧹 Deseja limpar todo o cache?\n\nIsso irá:\n- Remover dados salvos offline\n- Limpar login salvo\n- Forçar atualização dos dados\n\nVocê precisará fazer login novamente.')) {
-                try {
-                    console.log('🧹 Iniciando limpeza completa do cache...');
-                    
-                    // Limpar localStorage
-                    console.log('🗑️ Limpando localStorage...');
-                    localStorage.clear();
-                    
-                    // Limpar sessionStorage
-                    console.log('🗑️ Limpando sessionStorage...');
-                    sessionStorage.clear();
-                    
-                    // Limpar dados globais
-                    console.log('🗑️ Limpando variáveis globais...');
-                    window.dadosFornecedores = [];
-                    window.dadosOrganograma = [];
-                    window.dadosColaboradores = [];
-                    window.dadosPagcorp = [];
-                    
-                    // Limpar Service Worker cache
-                    if ('serviceWorker' in navigator && 'caches' in window) {
-                        console.log('🗑️ Limpando cache do Service Worker...');
-                        caches.keys().then(cacheNames => {
-                            return Promise.all(
-                                cacheNames.map(cacheName => caches.delete(cacheName))
-                            );
-                        }).then(() => {
-                            console.log('✅ Cache do Service Worker limpo');
-                        });
-                    }
-                    
-                    console.log('✅ Limpeza completa concluída!');
-                    alert('✅ Cache limpo com sucesso!\n\nA página será recarregada.');
-                    
-                    // Recarregar página
-                    window.location.reload(true);
-                    
-                } catch (error) {
-                    console.error('❌ Erro ao limpar cache:', error);
-                    alert('❌ Erro ao limpar cache. Tente recarregar a página manualmente.');
+            const opcoes = [
+                '🧹 Limpar cache mas manter login salvo',
+                '🚨 Limpar TUDO (incluindo login - precisará logar novamente)',
+                '❌ Cancelar'
+            ];
+            
+            const escolha = prompt(`Escolha uma opção:\n\n1 - ${opcoes[0]}\n2 - ${opcoes[1]}\n3 - ${opcoes[2]}\n\nDigite 1, 2 ou 3:`);
+            
+            if (escolha === '3' || escolha === null || escolha === '') {
+                console.log('🚫 Limpeza cancelada pelo usuário');
+                return;
+            }
+            
+            const manterLogin = escolha === '1';
+            
+            try {
+                console.log(`🧹 Iniciando limpeza ${manterLogin ? 'com preservação de login' : 'completa'} do cache...`);
+                
+                // 💾 SALVAR LOGIN ANTES DE LIMPAR (se escolheu manter)
+                let loginBackup = null;
+                let equipeBackup = null;
+                
+                if (manterLogin) {
+                    console.log('💾 Fazendo backup do login...');
+                    loginBackup = localStorage.getItem('loginData');
+                    equipeBackup = localStorage.getItem('equipe_logada');
                 }
+                
+                // Limpar localStorage
+                console.log('🗑️ Limpando localStorage...');
+                localStorage.clear();
+                
+                // Limpar sessionStorage
+                console.log('🗑️ Limpando sessionStorage...');
+                sessionStorage.clear();
+                
+                // 🔄 RESTAURAR LOGIN (se escolheu manter)
+                if (manterLogin && loginBackup && equipeBackup) {
+                    console.log('🔄 Restaurando login salvo...');
+                    localStorage.setItem('loginData', loginBackup);
+                    localStorage.setItem('equipe_logada', equipeBackup);
+                    
+                    // Resalvar com múltiplas estratégias
+                    try {
+                        const dados = JSON.parse(loginBackup);
+                        salvarLogin(dados.projeto, dados.equipe);
+                        console.log('✅ Login restaurado com sucesso');
+                    } catch (error) {
+                        console.error('⚠️ Erro ao restaurar login:', error);
+                        localStorage.setItem('loginData', loginBackup);
+                        localStorage.setItem('equipe_logada', equipeBackup);
+                    }
+                }
+                
+                // Limpar dados globais
+                console.log('🗑️ Limpando variáveis globais...');
+                window.dadosFornecedores = [];
+                window.dadosOrganograma = [];
+                window.dadosColaboradores = [];
+                window.dadosPagcorp = [];
+                
+                // Limpar Service Worker cache
+                if ('serviceWorker' in navigator && 'caches' in window) {
+                    console.log('🗑️ Limpando cache do Service Worker...');
+                    caches.keys().then(cacheNames => {
+                        return Promise.all(
+                            cacheNames.map(cacheName => caches.delete(cacheName))
+                        );
+                    }).then(() => {
+                        console.log('✅ Cache do Service Worker limpo');
+                    });
+                }
+                
+                console.log('✅ Limpeza concluída!');
+                
+                if (manterLogin) {
+                    alert('✅ Cache limpo com sucesso!\n\n🔐 Seu login foi preservado.\nA página será recarregada.');
+                } else {
+                    alert('✅ Cache e login limpos com sucesso!\n\nVocê precisará fazer login novamente.\nA página será recarregada.');
+                }
+                
+                // Recarregar página
+                window.location.reload(true);
+                
+            } catch (error) {
+                console.error('❌ Erro ao limpar cache:', error);
+                alert('❌ Erro ao limpar cache. Tente recarregar a página manualmente.');
             }
         }
 
