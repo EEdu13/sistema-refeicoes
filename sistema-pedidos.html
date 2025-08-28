@@ -4569,6 +4569,10 @@
             }
             
             console.log('✅ Select encontrado, populando fornecedores...');
+            console.log('🔍 window.dadosFornecedores disponível:', !!window.dadosFornecedores);
+            console.log('🔍 Tipo de dados:', typeof window.dadosFornecedores);
+            console.log('🔍 É array?', Array.isArray(window.dadosFornecedores));
+            console.log('🔍 Dados completos:', window.dadosFornecedores);
             
             // Limpar opções antigas (manter apenas as padrões)
             while (select.children.length > 2) {
@@ -4580,7 +4584,9 @@
                 console.log(`🏪 Populando ${window.dadosFornecedores.length} fornecedores no popup de problema`);
                 console.log('🏪 Fornecedores disponíveis:', window.dadosFornecedores);
                 
-                window.dadosFornecedores.forEach(fornecedor => {
+                window.dadosFornecedores.forEach((fornecedor, index) => {
+                    console.log(`🔍 Fornecedor ${index}:`, fornecedor);
+                    
                     const option = document.createElement('option');
                     option.value = fornecedor.NOME || fornecedor.nome || fornecedor;
                     option.textContent = fornecedor.NOME || fornecedor.nome || fornecedor;
@@ -4593,7 +4599,34 @@
                 console.log(`✅ ${window.dadosFornecedores.length} fornecedores adicionados com sucesso!`);
             } else {
                 console.log('⚠️ Nenhum fornecedor disponível para popular no popup');
-                console.log('🔍 window.dadosFornecedores:', window.dadosFornecedores);
+                console.log('🔍 window.dadosFornecedores atual:', window.dadosFornecedores);
+                
+                // Tentar buscar dados do cache
+                try {
+                    const cacheData = localStorage.getItem('dadosAPI_cache');
+                    if (cacheData) {
+                        const cache = JSON.parse(cacheData);
+                        console.log('📦 Dados do cache encontrados:', cache);
+                        console.log('🏪 Fornecedores no cache:', cache.fornecedores);
+                        
+                        if (cache.fornecedores && cache.fornecedores.length > 0) {
+                            console.log('🚀 Usando fornecedores do cache...');
+                            window.dadosFornecedores = cache.fornecedores;
+                            
+                            cache.fornecedores.forEach((fornecedor, index) => {
+                                const option = document.createElement('option');
+                                option.value = fornecedor.NOME || fornecedor.nome || fornecedor;
+                                option.textContent = fornecedor.NOME || fornecedor.nome || fornecedor;
+                                select.insertBefore(option, select.lastElementChild);
+                                console.log(`➕ Adicionado do cache: ${option.textContent}`);
+                            });
+                        }
+                    } else {
+                        console.log('❌ Nenhum cache encontrado');
+                    }
+                } catch (e) {
+                    console.log('❌ Erro ao ler cache:', e);
+                }
             }
         }
 
