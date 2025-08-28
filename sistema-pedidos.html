@@ -4588,8 +4588,10 @@
                     console.log(`🔍 Fornecedor ${index}:`, fornecedor);
                     
                     const option = document.createElement('option');
-                    option.value = fornecedor.NOME || fornecedor.nome || fornecedor;
-                    option.textContent = fornecedor.NOME || fornecedor.nome || fornecedor;
+                    // 🎯 CORRETO: usar FORNECEDOR em vez de NOME
+                    const nomeFornecedor = fornecedor.FORNECEDOR || fornecedor.NOME || fornecedor.nome || fornecedor;
+                    option.value = nomeFornecedor;
+                    option.textContent = nomeFornecedor;
                     
                     // Inserir antes da opção "Outro fornecedor"
                     select.insertBefore(option, select.lastElementChild);
@@ -4615,8 +4617,10 @@
                             
                             cache.fornecedores.forEach((fornecedor, index) => {
                                 const option = document.createElement('option');
-                                option.value = fornecedor.NOME || fornecedor.nome || fornecedor;
-                                option.textContent = fornecedor.NOME || fornecedor.nome || fornecedor;
+                                // 🎯 CORRETO: usar FORNECEDOR em vez de NOME
+                                const nomeFornecedor = fornecedor.FORNECEDOR || fornecedor.NOME || fornecedor.nome || fornecedor;
+                                option.value = nomeFornecedor;
+                                option.textContent = nomeFornecedor;
                                 select.insertBefore(option, select.lastElementChild);
                                 console.log(`➕ Adicionado do cache: ${option.textContent}`);
                             });
