@@ -2511,23 +2511,6 @@
             resetOrder();
         }
 
-        function doShowNewOrder() {
-            // Ocultar outras telas
-            document.getElementById('mainScreen').classList.add('hidden');
-            document.getElementById('temperatureScreen').classList.add('hidden');
-            document.getElementById('problemScreen').classList.add('hidden');
-            
-            // Mostrar tela de pedido
-            document.getElementById('orderScreen').classList.remove('hidden');
-            
-            // BUSCAR LÍDER ESPECÍFICO DA EQUIPE QUANDO ABRE NOVO PEDIDO
-            setTimeout(async function() {
-                console.log('🔄 Buscando líder específico da equipe ao abrir Novo Pedido...');
-                await buscarLiderDaEquipe();
-                preencherCamposAutomaticamente();
-            }, 100); // Pequeno delay para garantir que a tela foi exibida
-        }
-
         function toggleMealSelection(mealType) {
             const button = document.querySelector(`button[data-meal="${mealType}"]`);
             const supplierDiv = document.getElementById(`supplier-${mealType}`);
@@ -3994,9 +3977,16 @@
 
         // Detectar localização automaticamente quando a tela de novo pedido for aberta
         function doShowNewOrder() {
-            resetOrder();
+            // Ocultar outras telas
             document.getElementById('mainScreen').classList.add('hidden');
+            document.getElementById('temperatureScreen').classList.add('hidden');
+            document.getElementById('problemScreen').classList.add('hidden');
+            
+            // Mostrar tela de pedido
             document.getElementById('orderScreen').classList.remove('hidden');
+            
+            // Reset do formulário
+            resetOrder();
             
             // Preencher data de hoje por padrão
             const today = new Date().toISOString().split('T')[0];
@@ -4008,11 +3998,13 @@
                 setTimeout(detectLocation, 500); // Pequeno delay para a animação
             }
             
-            // PREENCHER AUTOMATICAMENTE OS CAMPOS QUANDO ABRE NOVO PEDIDO
-            setTimeout(function() {
-                console.log('🔄 Preenchendo campos automaticamente ao abrir Novo Pedido...');
+            // BUSCAR LÍDER E PREENCHER CAMPOS AUTOMATICAMENTE
+            setTimeout(async function() {
+                console.log('🔄 Buscando líder específico da equipe ao abrir Novo Pedido...');
+                await buscarLiderDaEquipe();
+                console.log('🔄 Preenchendo campos automaticamente...');
                 preencherCamposAutomaticamente();
-            }, 600); // Delay um pouco maior para garantir que tudo carregou
+            }, 600); // Delay para garantir que tudo carregou
         }
 
         // Variáveis globais para outros participantes
@@ -6037,41 +6029,56 @@ var templateParams = {
             }
             
             if (liderNome) {
-                console.log(`� Preenchimento automático: líder encontrado: "${liderNome}"`);
+                console.log(`✅ Preenchimento automático: líder encontrado: "${liderNome}"`);
                 
-                // Preencher Nome do Solicitante com o nome do líder (mas permite editar)
+                // Preencher Nome do Solicitante com o nome do líder (sempre preenche se vazio)
                 const requestorInput = document.getElementById('requestorNameInput');
-                if (requestorInput && !requestorInput.value.trim()) {
-                    requestorInput.value = liderNome;
-                    console.log(`✅ Nome do Solicitante preenchido com: "${liderNome}"`);
+                if (requestorInput) {
+                    if (!requestorInput.value.trim()) {
+                        requestorInput.value = liderNome;
+                        console.log(`✅ Nome do Solicitante preenchido com: "${liderNome}"`);
+                    } else {
+                        console.log(`ℹ️ Nome do Solicitante já preenchido: "${requestorInput.value}"`);
+                    }
                 }
                 
-                // Preencher Responsável pelo Cartão com o nome do líder (mas permite editar)
+                // Preencher Responsável pelo Cartão com o nome do líder (sempre preenche se vazio)
                 const cardResponsibleInput = document.getElementById('cardResponsibleInput');
-                if (cardResponsibleInput && !cardResponsibleInput.value.trim()) {
-                    cardResponsibleInput.value = liderNome;
-                    console.log(`✅ Responsável pelo Cartão preenchido com: "${liderNome}"`);
+                if (cardResponsibleInput) {
+                    if (!cardResponsibleInput.value.trim()) {
+                        cardResponsibleInput.value = liderNome;
+                        console.log(`✅ Responsável pelo Cartão preenchido com: "${liderNome}"`);
+                        
+                        // Buscar PAGCORP automaticamente quando preencher o responsável
+                        setTimeout(() => {
+                            buscarPagcorpPorResponsavel(liderNome);
+                        }, 500);
+                    } else {
+                        console.log(`ℹ️ Responsável pelo Cartão já preenchido: "${cardResponsibleInput.value}"`);
+                    }
                 }
             } else {
                 console.log(`⚠️ Nenhum líder encontrado para preenchimento automático`);
             }
                 
-                // Preencher PAGCORP se disponível
-                if (window.dadosPagcorp && window.dadosPagcorp.length > 0) {
-                    const pagcorpInput = document.getElementById('pagcorpInput');
-                    if (pagcorpInput && !pagcorpInput.value.trim()) {
-                        // Buscar o valor na coluna CONTA
-                        const pagcorpValue = window.dadosPagcorp[0].CONTA || window.dadosPagcorp[0].PAGCORP || window.dadosPagcorp[0].CODIGO || '';
-                        if (pagcorpValue && pagcorpValue.toString().trim()) {
-                            pagcorpInput.value = pagcorpValue;
-                            console.log(`✅ PAGCORP preenchido: ${pagcorpValue}`);
-                        } else {
-                            console.log('ℹ️ CONTA encontrada mas está vazia');
-                        }
+            // Preencher PAGCORP se disponível e campo estiver vazio
+            if (window.dadosPagcorp && window.dadosPagcorp.length > 0) {
+                const pagcorpInput = document.getElementById('pagcorpInput');
+                if (pagcorpInput && !pagcorpInput.value.trim()) {
+                    // Buscar o valor na coluna CONTA
+                    const pagcorpValue = window.dadosPagcorp[0].CONTA || window.dadosPagcorp[0].PAGCORP || window.dadosPagcorp[0].CODIGO || '';
+                    if (pagcorpValue && pagcorpValue.toString().trim()) {
+                        pagcorpInput.value = pagcorpValue;
+                        console.log(`✅ PAGCORP preenchido automaticamente: ${pagcorpValue}`);
+                    } else {
+                        console.log('ℹ️ CONTA encontrada mas está vazia');
                     }
-                } else {
-                    console.log('ℹ️ Nenhum PAGCORP encontrado');
+                } else if (pagcorpInput && pagcorpInput.value.trim()) {
+                    console.log(`ℹ️ PAGCORP já preenchido: "${pagcorpInput.value}"`);
                 }
+            } else {
+                console.log('ℹ️ Nenhum PAGCORP encontrado para preenchimento automático');
+            }
         }
 
         // Função para buscar PAGCORP automaticamente quando o responsável pelo cartão é alterado
