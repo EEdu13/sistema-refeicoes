@@ -2162,7 +2162,12 @@
 
                     <div style="margin-bottom: 15px;">
                         <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #374151;">🏪 Fornecedor:</label>
-                        <input type="text" id="fornecedorProblemaPopup" placeholder="Nome do fornecedor" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                        <select id="fornecedorProblemaPopup" onchange="handleFornecedorProblemaChange()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; background: white;">
+                            <option value="">Escolha o fornecedor</option>
+                            <option value="__custom__">✏️ Outro fornecedor</option>
+                        </select>
+                        <input type="text" id="fornecedorProblemaPopupCustom" placeholder="📝 Digite o nome do fornecedor" 
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; margin-top: 5px; display: none;">
                     </div>
 
                     <div style="margin-bottom: 15px;">
@@ -4485,8 +4490,13 @@
                       String(hoje.getDate()).padStart(2, '0');
             document.getElementById('dataProblemaPopup').value = data;
             
+            // Popular fornecedores do projeto
+            popularFornecedoresProblema();
+            
             // Limpar campos
             document.getElementById('fornecedorProblemaPopup').value = '';
+            document.getElementById('fornecedorProblemaPopupCustom').value = '';
+            document.getElementById('fornecedorProblemaPopupCustom').style.display = 'none';
             document.getElementById('observacaoProblemaPopup').value = '';
             document.getElementById('foto1Popup').value = '';
             document.getElementById('foto2Popup').value = '';
@@ -4542,10 +4552,60 @@
             }
         }
 
+        // Função para popular fornecedores no popup de problema
+        function popularFornecedoresProblema() {
+            const select = document.getElementById('fornecedorProblemaPopup');
+            if (!select) return;
+            
+            // Limpar opções antigas (manter apenas as padrões)
+            while (select.children.length > 2) {
+                select.removeChild(select.lastChild);
+            }
+            
+            // Adicionar fornecedores do projeto
+            if (window.dadosFornecedores && window.dadosFornecedores.length > 0) {
+                console.log(`🏪 Populando ${window.dadosFornecedores.length} fornecedores no popup de problema`);
+                
+                window.dadosFornecedores.forEach(fornecedor => {
+                    const option = document.createElement('option');
+                    option.value = fornecedor.NOME || fornecedor.nome || fornecedor;
+                    option.textContent = fornecedor.NOME || fornecedor.nome || fornecedor;
+                    
+                    // Inserir antes da opção "Outro fornecedor"
+                    select.insertBefore(option, select.lastElementChild);
+                });
+            } else {
+                console.log('⚠️ Nenhum fornecedor disponível para popular no popup');
+            }
+        }
+
+        // Função para lidar com mudança do select de fornecedor no popup
+        function handleFornecedorProblemaChange() {
+            const select = document.getElementById('fornecedorProblemaPopup');
+            const customInput = document.getElementById('fornecedorProblemaPopupCustom');
+            
+            if (select.value === '__custom__') {
+                customInput.style.display = 'block';
+                customInput.focus();
+            } else {
+                customInput.style.display = 'none';
+                customInput.value = '';
+            }
+        }
+
         function enviarProblemaPopup() {
             var data = document.getElementById('dataProblemaPopup').value;
-            var fornecedor = document.getElementById('fornecedorProblemaPopup').value;
+            var fornecedorSelect = document.getElementById('fornecedorProblemaPopup').value;
+            var fornecedorCustom = document.getElementById('fornecedorProblemaPopupCustom').value;
             var observacao = document.getElementById('observacaoProblemaPopup').value;
+            
+            // Determinar qual fornecedor usar
+            var fornecedor = '';
+            if (fornecedorSelect === '__custom__') {
+                fornecedor = fornecedorCustom;
+            } else {
+                fornecedor = fornecedorSelect;
+            }
             
             if (!data || !fornecedor || !observacao) {
                 alert('Por favor, preencha todos os campos obrigatórios!');
@@ -6187,10 +6247,27 @@ var templateParams = {
                     return;
                 }
                 
-                // ⚠️ LIMPAR DADOS ANTIGOS ANTES DE BUSCAR NOVOS
-                console.log('🧹 Limpando dados antigos do organograma...');
-                window.dadosOrganograma = [];
-                window.dadosPagcorp = [];
+                // 🚀 USAR DADOS JÁ CACHEADOS DO LOGIN
+                if (window.dadosOrganograma && window.dadosOrganograma.length > 0) {
+                    console.log('⚡ Usando dados do organograma já cacheados do login');
+                    console.log(`🎯 Total de registros do organograma: ${window.dadosOrganograma.length}`);
+                    
+                    window.dadosOrganograma.forEach((org, index) => {
+                        console.log(`🎯 Registro ${index}: EQUIPE=${org.EQUIPE}, LIDER=${org.LIDER}`);
+                    });
+                    
+                    // PAGCORP também já está cacheado
+                    if (window.dadosPagcorp && window.dadosPagcorp.length > 0) {
+                        console.log(`⚡ PAGCORP também já cacheado: ${window.dadosPagcorp.length} registros`);
+                    } else {
+                        console.log('ℹ️ Nenhum PAGCORP cacheado encontrado');
+                    }
+                    
+                    return; // ✅ Dados já disponíveis, não precisa buscar
+                }
+                
+                // ⚠️ FALLBACK: Se por algum motivo não tem cache, buscar novamente
+                console.log('⚠️ Dados não encontrados no cache, buscando do servidor...');
                 
                 // Extrair projeto da equipe (ex: 700AF -> 700)
                 const projeto = equipeLogada.replace(/[^0-9]/g, '');
@@ -6263,8 +6340,8 @@ var templateParams = {
             try {
                 console.log(`🔍 Buscando dados para projeto: ${projeto}, equipe: ${equipe}`);
                 
-                // 🎯 CARREGAR TUDO NO LOGIN: fornecedores, colaboradores E organograma
-                console.log(`🌐 Buscando fornecedores, colaboradores E organograma no login`);
+                // 🎯 CARREGAR TUDO NO LOGIN: fornecedores, colaboradores, organograma E PAGCORP
+                console.log(`🌐 Buscando fornecedores, colaboradores, organograma e PAGCORP no login`);
                 
                 const [fornecedoresResponse, colaboradoresResponse, organogramaResponse] = await Promise.all([
                     fetch(`${getServerBaseUrl()}/api/fornecedores?projeto=${projeto}`),
@@ -6304,34 +6381,60 @@ var templateParams = {
                     window.dadosOrganograma.forEach((org, index) => {
                         console.log(`   ${index}: EQUIPE=${org.EQUIPE}, COORDENADOR=${org.COORDENADOR}, SUPERVISOR=${org.SUPERVISOR}, LIDER=${org.LIDER}`);
                     });
+                    
+                    // 🚀 BUSCAR PAGCORP DO LÍDER JÁ NO LOGIN
+                    const lider = window.dadosOrganograma[0]?.LIDER;
+                    if (lider) {
+                        console.log(`🔍 Buscando PAGCORP para líder "${lider}" no login...`);
+                        try {
+                            const pagcorpResponse = await fetch(`${getServerBaseUrl()}/api/pagcorp?lider=${encodeURIComponent(lider)}`);
+                            if (pagcorpResponse.ok) {
+                                const pagcorpData = await pagcorpResponse.json();
+                                if (!pagcorpData.error) {
+                                    window.dadosPagcorp = pagcorpData.pagcorp || [];
+                                    console.log(`✅ PAGCORP carregado no login: ${window.dadosPagcorp.length} registros`);
+                                } else {
+                                    window.dadosPagcorp = [];
+                                    console.log('❌ Erro ao buscar PAGCORP no login:', pagcorpData.message);
+                                }
+                            } else {
+                                window.dadosPagcorp = [];
+                                console.log('❌ Erro na API do PAGCORP no login');
+                            }
+                        } catch (e) {
+                            window.dadosPagcorp = [];
+                            console.warn('❌ Erro ao buscar PAGCORP no login:', e);
+                        }
+                    } else {
+                        window.dadosPagcorp = [];
+                        console.log('❌ Nenhum líder encontrado no organograma para buscar PAGCORP');
+                    }
                 } else {
+                    window.dadosPagcorp = [];
                     console.log(`⚠️ Nenhum dado de organograma encontrado para projeto=${projeto}, equipe=${equipe}`);
                 }
                 
-                // Salvar cache offline (SEM organograma por enquanto)
+                // Salvar cache offline (INCLUINDO organograma e PAGCORP)
                 const cacheData = {
                     fornecedores: window.dadosFornecedores,
-                    organograma: [], // Será buscado no botão "Novo Pedido"
+                    organograma: window.dadosOrganograma, // ✅ Agora incluído no cache
                     colaboradores: window.dadosColaboradores,
-                    pagcorp: [], // Será buscado no botão "Novo Pedido" junto com organograma
+                    pagcorp: window.dadosPagcorp, // ✅ Agora incluído no cache
                     projeto: projeto,
                     equipe: equipe,
                     timestamp: Date.now()
                 };
                 localStorage.setItem('dadosAPI_cache', JSON.stringify(cacheData));
-                console.log('💾 Cache de dados das APIs salvo offline (sem organograma/pagcorp)');
+                console.log('💾 Cache de dados completo salvo (fornecedores + colaboradores + organograma + PAGCORP)');
                 
                 // Popular colaboradores na interface
                 popularColaboradores(window.dadosColaboradores);
                 
-                // PAGCORP será buscado no botão "Novo Pedido" junto com o organograma
-                window.dadosPagcorp = [];
-                
                 // Mostrar dados no console
                 console.log('Fornecedores:', window.dadosFornecedores);
                 console.log('Colaboradores:', window.dadosColaboradores);
-                console.log('Organograma: Será buscado no Novo Pedido');
-                console.log('Pagcorp: Será buscado no Novo Pedido');
+                console.log('Organograma:', window.dadosOrganograma);
+                console.log('Pagcorp:', window.dadosPagcorp);
                 
                 return true;
                 
