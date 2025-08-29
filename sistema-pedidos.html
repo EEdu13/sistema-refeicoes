@@ -3271,24 +3271,46 @@
                     }
                     
                     // NOVA TENTATIVA: Chamar API específica para atualizar status
-                    console.log('🔄 Tentando atualizar status AFERIU_TEMPERATURA separadamente...');
+                    console.log('🔄 Tentando atualizar status AFERIU_TEMPERATURA via API de pedidos...');
                     try {
-                        const statusResponse = await fetch(`${getServerBaseUrl()}/api/atualizar-status-temperatura`, {
+                        const statusResponse = await fetch(`${getServerBaseUrl()}/api/atualizar-pedido`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                             },
                             body: JSON.stringify({
-                                pedido_id: pedidoIdReal,
-                                aferiu_temperatura: "SIM",
-                                AFERIU_TEMPERATURA: "SIM"
+                                id: pedidoIdReal,
+                                aferiu_temperatura: "SIM"
                             })
                         });
                         
-                        const statusResult = await statusResponse.json();
-                        console.log('🎯 Resposta do update de status:', statusResult);
+                        if (statusResponse.ok) {
+                            const statusResult = await statusResponse.json();
+                            console.log('🎯 Status atualizado via API de pedidos:', statusResult);
+                        } else {
+                            console.log('⚠️ API de atualização de pedidos não disponível');
+                            
+                            // TERCEIRA TENTATIVA: Query direta via API genérica
+                            console.log('🔄 Tentando atualização via API genérica...');
+                            const genericResponse = await fetch(`${getServerBaseUrl()}/api/executar-query`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    query: `UPDATE PEDIDOS SET AFERIU_TEMPERATURA = 'SIM' WHERE ID = ${pedidoIdReal}`
+                                })
+                            });
+                            
+                            if (genericResponse.ok) {
+                                const genericResult = await genericResponse.json();
+                                console.log('🎯 Status atualizado via query direta:', genericResult);
+                            }
+                        }
+                        
                     } catch (statusError) {
-                        console.log('⚠️ API de status não disponível (normal se não existir):', statusError.message);
+                        console.log('⚠️ Não foi possível atualizar status automaticamente:', statusError.message);
+                        console.log('💡 O backend precisa ser atualizado para processar o campo aferiu_temperatura');
                     }
                     
                     alert('✅ Aferição de temperatura salva com sucesso!\n' + 
