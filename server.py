@@ -900,16 +900,26 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 print(f"   🎯 AFERIU_TEMPERATURA (frontend): {aferiu_temperatura_frontend}")
                 
                 print(f"🔧 EXECUTANDO QUERY COM PARÂMETROS:")
-                print(f"   Total parâmetros: {len([data_retirada, projeto, coordenador, supervisor, lider, nome_lider, fazenda, tipo_refeicao, cidade, fornecedor, valor_pago, colaboradores_nomes, total_colaboradores, a_contratar, responsavel_cartao, pagcorp, hospedado, nome_hotel, valor_diaria, total_pagar, aprovado_por, observacoes, fechamento, aferiu_temperatura_frontend])}")
+                parametros = [data_retirada, projeto, coordenador, supervisor, lider, nome_lider,
+                             fazenda, tipo_refeicao, cidade, fornecedor, valor_pago, 
+                             colaboradores_nomes, total_colaboradores, a_contratar,
+                             responsavel_cartao, pagcorp, hospedado, nome_hotel, valor_diaria,
+                             total_pagar, aprovado_por, observacoes, fechamento, aferiu_temperatura_frontend]
+                print(f"   Total parâmetros: {len(parametros)}")
                 print(f"   AFERIU_TEMPERATURA será: '{aferiu_temperatura_frontend}'")
                 
-                resultado = executar_query(query, [
-                    data_retirada, projeto, coordenador, supervisor, lider, nome_lider,
-                    fazenda, tipo_refeicao, cidade, fornecedor, valor_pago, 
-                    colaboradores_nomes, total_colaboradores, a_contratar,
-                    responsavel_cartao, pagcorp, hospedado, nome_hotel, valor_diaria,
-                    total_pagar, aprovado_por, observacoes, fechamento, aferiu_temperatura_frontend
-                ])
+                # DEBUG DETALHADO DE CADA PARÂMETRO
+                param_names = ["data_retirada", "projeto", "coordenador", "supervisor", "lider", "nome_lider",
+                              "fazenda", "tipo_refeicao", "cidade", "fornecedor", "valor_pago", 
+                              "colaboradores_nomes", "total_colaboradores", "a_contratar",
+                              "responsavel_cartao", "pagcorp", "hospedado", "nome_hotel", "valor_diaria",
+                              "total_pagar", "aprovado_por", "observacoes", "fechamento", "aferiu_temperatura"]
+                
+                print("🔍 DEBUG PARÂMETROS DETALHADO:")
+                for i, (name, value) in enumerate(zip(param_names, parametros)):
+                    print(f"   {i+1:2d}. {name}: {repr(value)} ({type(value).__name__})")
+                
+                resultado = executar_query(query, parametros)
                 
                 if resultado is not None and isinstance(resultado, dict) and 'inserted_id' in resultado:
                     # Sucesso - retornar o ID real do banco
