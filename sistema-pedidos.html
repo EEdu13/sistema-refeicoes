@@ -3288,30 +3288,63 @@
                             const statusResult = await statusResponse.json();
                             console.log('🎯 Status atualizado via API de pedidos:', statusResult);
                         } else {
-                            console.log('⚠️ API de atualização de pedidos não disponível');
-                            
-                            // TERCEIRA TENTATIVA: Query direta via API genérica
-                            console.log('🔄 Tentando atualização via API genérica...');
-                            const genericResponse = await fetch(`${getServerBaseUrl()}/api/executar-query`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify({
-                                    query: `UPDATE PEDIDOS SET AFERIU_TEMPERATURA = 'SIM' WHERE ID = ${pedidoIdReal}`
-                                })
-                            });
-                            
-                            if (genericResponse.ok) {
-                                const genericResult = await genericResponse.json();
-                                console.log('🎯 Status atualizado via query direta:', genericResult);
-                            }
+                            console.log('⚠️ API de atualização de pedidos retornou erro:', statusResponse.status);
                         }
                         
                     } catch (statusError) {
-                        console.log('⚠️ Não foi possível atualizar status automaticamente:', statusError.message);
-                        console.log('💡 O backend precisa ser atualizado para processar o campo aferiu_temperatura');
+                        console.log('⚠️ Erro na API de pedidos:', statusError.message);
                     }
+                    
+                    // TERCEIRA TENTATIVA: Query direta via API genérica (sempre tentar)
+                    console.log('🔄 Tentando atualização via API genérica...');
+                    try {
+                        const genericResponse = await fetch(`${getServerBaseUrl()}/api/executar-query`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                query: `UPDATE PEDIDOS SET AFERIU_TEMPERATURA = 'SIM' WHERE ID = ${pedidoIdReal}`
+                            })
+                        });
+                        
+                        if (genericResponse.ok) {
+                            const genericResult = await genericResponse.json();
+                            console.log('🎯 Status atualizado via query direta:', genericResult);
+                        } else {
+                            console.log('⚠️ API genérica retornou erro:', genericResponse.status);
+                        }
+                        
+                    } catch (genericError) {
+                        console.log('⚠️ Erro na API genérica:', genericError.message);
+                    }
+                    
+                    // QUARTA TENTATIVA: API específica para temperatura
+                    console.log('🔄 Tentando API específica para temperatura...');
+                    try {
+                        const tempResponse = await fetch(`${getServerBaseUrl()}/api/marcar-temperatura-concluida`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                pedido_id: pedidoIdReal,
+                                status: "SIM"
+                            })
+                        });
+                        
+                        if (tempResponse.ok) {
+                            const tempResult = await tempResponse.json();
+                            console.log('🎯 Status atualizado via API de temperatura:', tempResult);
+                        } else {
+                            console.log('⚠️ API de temperatura retornou erro:', tempResponse.status);
+                        }
+                        
+                    } catch (tempError) {
+                        console.log('⚠️ Erro na API de temperatura:', tempError.message);
+                    }
+                    
+                    console.log('💡 IMPORTANTE: O backend precisa processar o campo aferiu_temperatura na API principal /api/afericao-temperatura');
                     
                     alert('✅ Aferição de temperatura salva com sucesso!\n' + 
                           `🌡️ Retirada: ${tempRetirada}°C\n` +
