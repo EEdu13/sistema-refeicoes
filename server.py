@@ -187,6 +187,14 @@ def executar_query(query, params=None):
             
     except Exception as e:
         print(f"❌ Erro ao executar query: {e}")
+        print(f"❌ Tipo do erro: {type(e).__name__}")
+        print(f"❌ Query que falhou: {query[:200]}...")
+        if params:
+            print(f"❌ Parâmetros: {len(params) if params else 0} itens")
+            if len(params) <= 10:
+                print(f"❌ Parâmetros detalhados: {params}")
+        import traceback
+        print(f"❌ Stack trace: {traceback.format_exc()}")
         return None
     finally:
         conn.close()
@@ -777,8 +785,23 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 colunas = executar_query(check_table_query, [])
                 if colunas:
                     print("🔍 Estrutura da tabela PEDIDOS:")
+                    coluna_aferiu_existe = False
                     for col in colunas:
-                        print(f"   - {col['COLUMN_NAME']} ({col['DATA_TYPE']}) - Default: {col.get('COLUMN_DEFAULT', 'N/A')}")
+                        print(f"   - {col['COLUMN_NAME']} ({col['DATA_TYPE']})")
+                        if col['COLUMN_NAME'] == 'AFERIU_TEMPERATURA':
+                            coluna_aferiu_existe = True
+                    
+                    # Verificar se coluna AFERIU_TEMPERATURA existe
+                    if not coluna_aferiu_existe:
+                        print("⚠️ Coluna AFERIU_TEMPERATURA não existe! Criando...")
+                        try:
+                            alter_query = "ALTER TABLE PEDIDOS ADD AFERIU_TEMPERATURA NVARCHAR(50) NULL"
+                            resultado_alter = executar_query(alter_query, [])
+                            print(f"✅ Coluna AFERIU_TEMPERATURA criada: {resultado_alter}")
+                        except Exception as e:
+                            print(f"❌ Erro ao criar coluna AFERIU_TEMPERATURA: {e}")
+                    else:
+                        print("✅ Coluna AFERIU_TEMPERATURA já existe")
                 else:
                     print("⚠️ Não foi possível obter estrutura da tabela")
                 
@@ -875,6 +898,10 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 print(f"   VALOR DIÁRIA: R$ {valor_diaria}")
                 print(f"   FECHAMENTO: {fechamento}")
                 print(f"   🎯 AFERIU_TEMPERATURA (frontend): {aferiu_temperatura_frontend}")
+                
+                print(f"🔧 EXECUTANDO QUERY COM PARÂMETROS:")
+                print(f"   Total parâmetros: {len([data_retirada, projeto, coordenador, supervisor, lider, nome_lider, fazenda, tipo_refeicao, cidade, fornecedor, valor_pago, colaboradores_nomes, total_colaboradores, a_contratar, responsavel_cartao, pagcorp, hospedado, nome_hotel, valor_diaria, total_pagar, aprovado_por, observacoes, fechamento, aferiu_temperatura_frontend])}")
+                print(f"   AFERIU_TEMPERATURA será: '{aferiu_temperatura_frontend}'")
                 
                 resultado = executar_query(query, [
                     data_retirada, projeto, coordenador, supervisor, lider, nome_lider,
