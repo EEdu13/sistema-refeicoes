@@ -2821,9 +2821,37 @@
                 alert("Erro ao salvar pedidos. Tente novamente.");
             }
         }
+        
+        function cleanOldProcessedIds() {
+            try {
+                const processedIdsData = localStorage.getItem('processedTemperatureIds_withTime');
+                if (!processedIdsData) return;
+                
+                const data = JSON.parse(processedIdsData);
+                const now = Date.now();
+                const twentyFourHours = 24 * 60 * 60 * 1000; // 24 horas em ms
+                
+                // Filtrar apenas IDs processados nas últimas 24 horas
+                const validIds = data.filter(item => (now - item.timestamp) < twentyFourHours);
+                
+                // Atualizar localStorage
+                localStorage.setItem('processedTemperatureIds_withTime', JSON.stringify(validIds));
+                
+                // Também atualizar a lista simples de IDs para compatibilidade
+                const simpleIds = validIds.map(item => item.id);
+                localStorage.setItem('processedTemperatureIds', JSON.stringify(simpleIds));
+                
+                console.log(`🧹 Limpeza de IDs processados: ${data.length} → ${validIds.length} (removidos ${data.length - validIds.length} antigos)`);
+            } catch (error) {
+                console.error('❌ Erro ao limpar IDs processados antigos:', error);
+            }
+        }
 
         async function loadPendingTemperatures() {
             console.log('📋 Carregando pendências reais do banco de dados...');
+            
+            // Limpar IDs processados antigos (mais de 24 horas)
+            cleanOldProcessedIds();
             
             try {
                 // 🎯 BUSCAR APENAS PENDÊNCIAS DA EQUIPE LOGADA
@@ -2847,7 +2875,18 @@
                 } else {
                     console.log(`✅ ${result.total} pendências carregadas do banco de dados`);
                     console.log('📋 Pendências detalhadas:', result.pendencias);
-                    pendingTemperatures = result.pendencias;
+                    
+                    // Filtrar IDs já processados para evitar que voltem
+                    const processedIds = JSON.parse(localStorage.getItem('processedTemperatureIds') || '[]');
+                    const filteredPendencias = result.pendencias.filter(item => !processedIds.includes(item.id));
+                    
+                    if (processedIds.length > 0) {
+                        console.log('🔒 IDs processados filtrados:', processedIds);
+                        console.log(`📊 Pendências antes do filtro: ${result.pendencias.length}`);
+                        console.log(`📊 Pendências após o filtro: ${filteredPendencias.length}`);
+                    }
+                    
+                    pendingTemperatures = filteredPendencias;
                     
                     // Salvar cache offline para uso quando estiver desconectado
                     localStorage.setItem('pendingTemperatures_cache', JSON.stringify(pendingTemperatures));
@@ -2879,8 +2918,18 @@
                 const cacheTime = localStorage.getItem('pendingTemperatures_cache_time');
                 
                 if (cachedData) {
-                    pendingTemperatures = JSON.parse(cachedData);
-                    console.log(`✅ ${pendingTemperatures.length} pendências carregadas do cache offline`);
+                    let cachedPendencies = JSON.parse(cachedData);
+                    
+                    // Filtrar IDs já processados também no cache
+                    const processedIds = JSON.parse(localStorage.getItem('processedTemperatureIds') || '[]');
+                    cachedPendencies = cachedPendencies.filter(item => !processedIds.includes(item.id));
+                    
+                    pendingTemperatures = cachedPendencies;
+                    console.log(`✅ ${pendingTemperatures.length} pendências carregadas do cache offline (após filtrar processados)`);
+                    
+                    if (processedIds.length > 0) {
+                        console.log('🔒 IDs processados filtrados do cache:', processedIds);
+                    }
                     
                     if (cacheTime) {
                         const cacheAge = Date.now() - parseInt(cacheTime);
@@ -3221,6 +3270,22 @@
                     // Esconder loading overlay após sucesso
                     if (loadingOverlay) {
                         loadingOverlay.style.display = 'none';
+                    }
+                    
+                    // Adicionar ID à lista de processados para evitar que volte
+                    let processedIds = JSON.parse(localStorage.getItem('processedTemperatureIds') || '[]');
+                    let processedIdsWithTime = JSON.parse(localStorage.getItem('processedTemperatureIds_withTime') || '[]');
+                    
+                    if (!processedIds.includes(currentTempData.id)) {
+                        processedIds.push(currentTempData.id);
+                        processedIdsWithTime.push({
+                            id: currentTempData.id,
+                            timestamp: Date.now()
+                        });
+                        
+                        localStorage.setItem('processedTemperatureIds', JSON.stringify(processedIds));
+                        localStorage.setItem('processedTemperatureIds_withTime', JSON.stringify(processedIdsWithTime));
+                        console.log('🔒 ID adicionado à lista de processados:', currentTempData.id);
                     }
                     
                     // Remover IMEDIATAMENTE da lista local para feedback visual instantâneo
