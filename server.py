@@ -897,11 +897,41 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                         aferiu_status = 'NÃO'  # Para MARMITEX e outros que precisam de aferição
                         print(f"🌡️ RESULTADO: Tipo '{tipo_refeicao}' → AFERIU_TEMPERATURA = 'NÃO' (requer aferição)")
                     
+                    # 🔧 GARANTIR QUE A COLUNA AFERIU_TEMPERATURA EXISTE
+                    print(f"🔧 Verificando se coluna AFERIU_TEMPERATURA existe...")
+                    check_column_query = """
+                    SELECT COLUMN_NAME 
+                    FROM INFORMATION_SCHEMA.COLUMNS 
+                    WHERE TABLE_NAME = 'PEDIDOS' AND COLUMN_NAME = 'AFERIU_TEMPERATURA'
+                    """
+                    coluna_existe = executar_query(check_column_query, [])
+                    
+                    if not coluna_existe or len(coluna_existe) == 0:
+                        print(f"⚠️ Coluna AFERIU_TEMPERATURA não existe. Criando...")
+                        create_column_query = "ALTER TABLE PEDIDOS ADD AFERIU_TEMPERATURA NVARCHAR(50) NULL"
+                        resultado_create = executar_query(create_column_query, [])
+                        print(f"✅ Coluna AFERIU_TEMPERATURA criada: {resultado_create}")
+                    else:
+                        print(f"✅ Coluna AFERIU_TEMPERATURA já existe")
+                    
                     # Atualizar campo AFERIU_TEMPERATURA
                     print(f"🎯 Definindo AFERIU_TEMPERATURA = '{aferiu_status}' para pedido {pedido_id_real}")
                     query_aferiu = "UPDATE PEDIDOS SET AFERIU_TEMPERATURA = %s WHERE ID = %s"
                     resultado_aferiu = executar_query(query_aferiu, [aferiu_status, pedido_id_real])
                     print(f"✅ Campo AFERIU_TEMPERATURA atualizado: {resultado_aferiu} linhas afetadas")
+                    
+                    # 🔥 VERIFICAÇÃO ADICIONAL: Confirmar se foi salvo corretamente
+                    query_verificacao = "SELECT AFERIU_TEMPERATURA FROM PEDIDOS WHERE ID = %s"
+                    resultado_verificacao = executar_query(query_verificacao, [pedido_id_real])
+                    if resultado_verificacao and len(resultado_verificacao) > 0:
+                        valor_salvo = resultado_verificacao[0]['AFERIU_TEMPERATURA']
+                        print(f"🔍 VERIFICAÇÃO: Campo salvo no banco = '{valor_salvo}'")
+                        if valor_salvo != aferiu_status:
+                            print(f"❌ ERRO: Esperado '{aferiu_status}', mas foi salvo '{valor_salvo}'")
+                        else:
+                            print(f"✅ CONFIRMADO: '{aferiu_status}' salvo corretamente no banco!")
+                    else:
+                        print(f"❌ ERRO: Não foi possível verificar o valor salvo no banco")
                     
                     response = {
                         "error": False,
