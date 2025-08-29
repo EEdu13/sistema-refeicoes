@@ -48,19 +48,7 @@ AZURE_BLOB_CONFIG = {
     'sas_token': os.getenv('AZURE_SAS_TOKEN')
 }
 
-# Debug das configurações do Azure Blob
-print("🔧 DEBUG Azure Blob Config:")
-print(f"  account_name: {AZURE_BLOB_CONFIG['account_name']}")
-print(f"  container_name: {AZURE_BLOB_CONFIG['container_name']}")
-print(f"  sas_token: {'***' if AZURE_BLOB_CONFIG['sas_token'] else 'MISSING'}")
-
-# Verificar se todas as configurações estão presentes
-if not all(AZURE_BLOB_CONFIG.values()):
-    print("❌ ERRO: Configurações do Azure Blob Storage estão incompletas!")
-    missing = [k for k, v in AZURE_BLOB_CONFIG.items() if not v]
-    print(f"   Variáveis faltando: {missing}")
-else:
-    print("✅ Configurações do Azure Blob Storage carregadas com sucesso")
+# Configurações Azure carregadas
 
 def conectar_azure_sql():
     """Conecta ao Azure SQL Server"""
@@ -133,7 +121,7 @@ def upload_imagem_blob(imagem_base64, nome_arquivo):
         if response.status_code in [200, 201]:
             # URL pública da imagem (sem SAS token para armazenar)
             url_publica = f"https://{AZURE_BLOB_CONFIG['account_name']}.blob.core.windows.net/{AZURE_BLOB_CONFIG['container_name']}/{nome_unico}"
-            print(f"✅ Upload concluído RAPIDAMENTE: {url_publica}")
+            # Upload concluído
             
             # SEM AGUARDAR PROPAGAÇÃO - upload assíncrono
             print("⚡ Upload concluído - continuando sem esperar propagação")
@@ -453,7 +441,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
             
         elif path == '/api/pagcorp':
             lider = query_params.get('lider', [''])[0]
-            print(f"🔍 Buscando PAGCORP para líder: {lider}")
+            # Buscar PAGCORP para líder
             
             try:
                 # Buscar dados reais na tabela PAGCORP_CAD
@@ -461,7 +449,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 resultado = executar_query(query, [lider])
                 
                 if resultado and len(resultado) > 0:
-                    print(f"✅ PAGCORP encontrado: {resultado}")
+                    # PAGCORP encontrado
                     response = {
                         "error": False,
                         "lider": lider,
@@ -469,7 +457,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                         "pagcorp": resultado
                     }
                 else:
-                    print(f"❌ Nenhum PAGCORP encontrado para: {lider}")
+                    # Nenhum PAGCORP encontrado
                     response = {
                         "error": False,
                         "lider": lider,
@@ -489,7 +477,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
             
         elif path == '/api/pedidos-pendentes-temperatura':
             # Buscar pedidos reais de MARMITEX que precisam de aferição de temperatura
-            print("🔍 Buscando pedidos MARMITEX pendentes de temperatura no banco...")
+            # Buscar pedidos MARMITEX pendentes de temperatura
             
             # 🎯 OBTER PARÂMETRO DE EQUIPE PARA FILTRAR
             parsed_url = urllib.parse.urlparse(self.path)
@@ -511,7 +499,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 ORDER BY DATA_ENVIO1 DESC
                 """
                 query_params_db = [equipe_param]
-                print(f"🔍 Query para equipe específica: {equipe_param} - só AFERIU_TEMPERATURA = NULL/NÃO")
+                # Query para equipe específica
             else:
                 # Query sem filtro de equipe (comportamento original)
                 query = """
@@ -524,7 +512,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 ORDER BY DATA_ENVIO1 DESC
                 """
                 query_params_db = []
-                print("🔍 Query para todas as equipes - só AFERIU_TEMPERATURA = NULL/NÃO")
+                # Query para todas as equipes
             
             try:
                 pedidos_pendentes = executar_query(query, query_params_db)
@@ -931,106 +919,17 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     pedido_id_real = resultado['inserted_id']
                     print(f"✅ Pedido salvo com ID real: {pedido_id_real}")
                     
-                    # 🔥 DEFINIR STATUS AFERIU_TEMPERATURA BASEADO NO TIPO DE REFEIÇÃO
-                    # DEBUG COMPLETO - vamos ver EXATAMENTE o que está chegando
-                    print(f"🔍 DEBUG COMPLETO - Dados recebidos:")
-                    print(f"   tipo_refeicao RAW: '{tipo_refeicao}'")
-                    print(f"   tipo_refeicao type: {type(tipo_refeicao)}")
-                    print(f"   tipo_refeicao repr: {repr(tipo_refeicao)}")
-                    print(f"   tipo_refeicao bytes: {tipo_refeicao.encode('utf-8') if isinstance(tipo_refeicao, str) else 'N/A'}")
-                    
-                    # Função robusta para normalizar strings
-                    def normalizar_string(texto):
-                        import unicodedata
-                        import re
-                        
-                        if not texto:
-                            return ""
-                        
-                        # Converter para string se não for
-                        texto = str(texto)
-                        
-                        # Normalizar Unicode (NFD = Normalization Form Decomposed)
-                        texto_nfd = unicodedata.normalize('NFD', texto)
-                        
-                        # Remover diacríticos (acentos)
-                        texto_sem_acento = ''.join(c for c in texto_nfd if unicodedata.category(c) != 'Mn')
-                        
-                        # Converter para maiúsculo
-                        texto_upper = texto_sem_acento.upper().strip()
-                        
-                        # Remover pontuação e caracteres especiais, manter apenas letras e espaços
-                        texto_limpo = re.sub(r'[^A-Z\s]', '', texto_upper)
-                        
-                        # Normalizar espaços múltiplos
-                        texto_final = re.sub(r'\s+', ' ', texto_limpo).strip()
-                        
-                        return texto_final
-                    
-                    # Normalizar o tipo de refeição
-                    tipo_normalizado = normalizar_string(tipo_refeicao)
-                    
-                    print(f"� APÓS NORMALIZAÇÃO:")
-                    print(f"   Tipo normalizado: '{tipo_normalizado}'")
-                    
-                    # Inicializar aferiu_status
-                    aferiu_status = 'NÃO'  # PADRÃO: requer aferição
-                    
-                    # LISTA DEFINITIVA - baseada EXATAMENTE no que o frontend envia
-                    # Frontend envia: 'CAFÉ DA MANHÃ', 'ALMOÇO LOCAL', 'JANTA LOCAL'
-                    tipos_nao_necessita_completos = [
-                        'CAFE DA MANHA',    # Para 'CAFÉ DA MANHÃ' (normalizado)
-                        'ALMOCO LOCAL',     # Para 'ALMOÇO LOCAL' (normalizado)  
-                        'JANTA LOCAL'       # Para 'JANTA LOCAL' (normalizado)
-                    ]
-                    
-                    print(f"🔍 VERIFICANDO TIPOS COMPLETOS:")
-                    
-                    # Verificar se o tipo normalizado corresponde exatamente
-                    for tipo_esperado in tipos_nao_necessita_completos:
-                        if tipo_esperado == tipo_normalizado:
-                            aferiu_status = 'NAO NECESSITA'  # SEM ACENTOS para evitar problemas
-                            print(f"✅ MATCH EXATO: '{tipo_normalizado}' == '{tipo_esperado}' → NAO NECESSITA")
-                            break
-                        else:
-                            print(f"❌ NO MATCH: '{tipo_normalizado}' != '{tipo_esperado}'")
-                    
-                    # Se não encontrou match exato, tentar palavras-chave
-                    if aferiu_status == 'NÃO':
-                        palavras_nao_necessita = ['CAFE', 'ALMOCO LOCAL', 'JANTA LOCAL']
-                        print(f"🔍 TENTANDO PALAVRAS-CHAVE:")
-                        
-                        for palavra in palavras_nao_necessita:
-                            if palavra in tipo_normalizado:
-                                aferiu_status = 'NAO NECESSITA'
-                                print(f"✅ MATCH PALAVRA: '{tipo_normalizado}' contém '{palavra}' → NAO NECESSITA")
-                                break
-                            else:
-                                print(f"❌ NO MATCH: '{tipo_normalizado}' NÃO contém '{palavra}'")
-                    
-                    # Log final
-                    if aferiu_status == 'NAO NECESSITA':
-                        print(f"🚫 FINAL: '{tipo_refeicao}' → AFERIU_TEMPERATURA = 'NAO NECESSITA'")
-                    else:
-                        print(f"🌡️ FINAL: '{tipo_refeicao}' → AFERIU_TEMPERATURA = 'NÃO' (requer aferição)")
-                    
-                    print(f"🎯 VALOR FINAL de aferiu_status: '{aferiu_status}'")
-                    
                     # ✅ AFERIU_TEMPERATURA JÁ FOI INSERIDO DIRETAMENTE NA QUERY PRINCIPAL
-                    print(f"✅ AFERIU_TEMPERATURA inserido diretamente do frontend: '{aferiu_temperatura_frontend}'")
+                    # ✅ AFERIU_TEMPERATURA JÁ FOI INSERIDO DIRETAMENTE NA QUERY PRINCIPAL
                     
                     response = {
                         "error": False,
                         "message": "Pedido salvo com sucesso!",
-                        "pedido_id": pedido_id_real,  # ID real do banco
+                        "pedido_id": pedido_id_real,
                         "tipo_refeicao": tipo_refeicao,
                         "total_pagar": total_pagar,
-                        "aferiu_temperatura": aferiu_temperatura_frontend,  # Valor REAL inserido no banco
-                        "debug_frontend_enviou": aferiu_temperatura_frontend,  # DEBUG temporário  
-                        "debug_tipo_original": tipo_refeicao,  # DEBUG temporário
-                        "debug_query_incluiu": "AFERIU_TEMPERATURA adicionado na query principal"  # DEBUG temporário
+                        "aferiu_temperatura": aferiu_temperatura_frontend
                     }
-                    print(f"� RESPONSE FINAL: {json.dumps(response, ensure_ascii=False, indent=2)}")  # DEBUG completo
                 else:
                     print(f"❌ Falha ao inserir - resultado: {resultado}")
                     response = {

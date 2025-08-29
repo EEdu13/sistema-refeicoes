@@ -3629,39 +3629,6 @@
             doShowMain();
         }
 
-        // ✅ FUNÇÃO DE DEBUG PARA TESTAR ANEXOS
-        function debugFileInput(inputId) {
-            console.log(`🔍 === DEBUG ${inputId} ===`);
-            
-            const fileInput = document.getElementById(inputId);
-            const preview = document.getElementById(inputId === 'fileRetirada' ? 'previewRetirada' : 'previewConsumo');
-            const canvas = document.getElementById(inputId === 'fileRetirada' ? 'canvasRetirada' : 'canvasConsumo');
-            
-            console.log('📋 Elementos encontrados:');
-            console.log('   - Input:', !!fileInput, fileInput);
-            console.log('   - Preview:', !!preview, preview);
-            console.log('   - Canvas:', !!canvas, canvas);
-            
-            if (fileInput) {
-                console.log('📁 Files:', fileInput.files.length, fileInput.files);
-                console.log('📎 Event listeners:', fileInput.getEventListeners ? fileInput.getEventListeners() : 'Não disponível');
-            }
-            
-            // Testar variáveis globais
-            console.log('🌐 Variáveis globais:');
-            console.log('   - globalImageRetirada:', !!globalImageRetirada, globalImageRetirada ? `(${globalImageRetirada.length} chars)` : '');
-            console.log('   - globalImageConsumo:', !!globalImageConsumo, globalImageConsumo ? `(${globalImageConsumo.length} chars)` : '');
-            console.log('   - imageTimestamps:', imageTimestamps);
-            
-            alert(`🔍 Debug de ${inputId}:\n\n` +
-                  `Input encontrado: ${!!fileInput}\n` +
-                  `Preview encontrado: ${!!preview}\n` +
-                  `Canvas encontrado: ${!!canvas}\n` +
-                  `Arquivos carregados: ${fileInput ? fileInput.files.length : 0}\n` +
-                  `Imagem global: ${inputId === 'fileRetirada' ? !!globalImageRetirada : !!globalImageConsumo}\n\n` +
-                  `Verifique o console para mais detalhes.`);
-        }
-
         function doTakePhoto() {
             document.getElementById('temperaturePhoto').click();
         }
@@ -5530,7 +5497,7 @@ var templateParams = {
                 if (permission === 'granted') {
                     console.log('✅ Notificações permitidas');
                     
-                    // Para iOS, mostrar notificação de teste para garantir que funciona
+                    // Notificação inicial para iOS PWA
                     if (isIOS) {
                         new Notification('🍎 iOS PWA Ativo!', {
                             body: 'Background sync habilitado para pedidos offline',
@@ -7358,20 +7325,6 @@ var templateParams = {
                         }
                     ]
                 });
-            }
-        }
-        
-        // Função para testar notificação manualmente (apenas para teste)
-        function testNotification() {
-            if ('serviceWorker' in navigator && swRegistration) {
-                swRegistration.showNotification('🧪 Teste de Notificação', {
-                    body: 'Esta é uma notificação de teste às ' + new Date().toLocaleTimeString('pt-BR'),
-                    icon: '/icon-192x192.png',
-                    badge: '/icon-192x192.png',
-                    tag: 'test-notification',
-                    requireInteraction: true
-                });
-                console.log('🧪 Notificação de teste enviada');
             }
         }
     </script>
