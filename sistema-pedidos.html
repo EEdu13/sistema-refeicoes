@@ -3233,6 +3233,8 @@
                 img_consumo: imgConsumo,
                 observacoes: observacoesGerais,
                 aferiu_temperatura: "SIM", // IMPORTANTE: Marcar como aferido
+                AFERIU_TEMPERATURA: "SIM", // Backup caso a API espere maiúsculo
+                status_temperatura: "SIM", // Backup caso o campo tenha outro nome
                 timestamp: new Date().toISOString()
             };
             
@@ -3242,6 +3244,7 @@
                 temp_consumo: aferição.temperatura_consumo,
                 hora_retirada: aferição.hora_retirada,   // NOVO LOG
                 hora_consumo: aferição.hora_consumo,     // NOVO LOG
+                aferiu_temperatura: aferição.aferiu_temperatura, // LOG DO CAMPO CRÍTICO
                 has_img_retirada: !!aferição.img_retirada,
                 has_img_consumo: !!aferição.img_consumo
             });
@@ -3249,6 +3252,9 @@
             // Tentar enviar online primeiro
             if (isOnlineGlobal) {
                 try {
+                    console.log('🚀 ENVIANDO PARA API /api/afericao-temperatura:');
+                    console.log('📤 Dados completos sendo enviados:', JSON.stringify(aferição, null, 2));
+                    
                     const response = await fetch(`${getServerBaseUrl()}/api/afericao-temperatura`, {
                         method: 'POST',
                         headers: {
@@ -3258,9 +3264,31 @@
                     });
                     
                     const result = await response.json();
+                    console.log('📥 Resposta da API:', JSON.stringify(result, null, 2));
                     
                     if (result.error) {
                         throw new Error(result.message);
+                    }
+                    
+                    // NOVA TENTATIVA: Chamar API específica para atualizar status
+                    console.log('🔄 Tentando atualizar status AFERIU_TEMPERATURA separadamente...');
+                    try {
+                        const statusResponse = await fetch(`${getServerBaseUrl()}/api/atualizar-status-temperatura`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                pedido_id: pedidoIdReal,
+                                aferiu_temperatura: "SIM",
+                                AFERIU_TEMPERATURA: "SIM"
+                            })
+                        });
+                        
+                        const statusResult = await statusResponse.json();
+                        console.log('🎯 Resposta do update de status:', statusResult);
+                    } catch (statusError) {
+                        console.log('⚠️ API de status não disponível (normal se não existir):', statusError.message);
                     }
                     
                     alert('✅ Aferição de temperatura salva com sucesso!\n' + 
