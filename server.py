@@ -886,14 +886,16 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     
                     # 🔥 DEFINIR STATUS AFERIU_TEMPERATURA BASEADO NO TIPO DE REFEIÇÃO
                     tipo_upper = tipo_refeicao.upper().strip()
-                    print(f"🔍 Verificando tipo de refeição: '{tipo_upper}'")
+                    print(f"🔍 DEBUG - Tipo original: '{tipo_refeicao}'")
+                    print(f"🔍 DEBUG - Tipo processado: '{tipo_upper}'")
+                    print(f"🔍 DEBUG - Verificando se está na lista: ['CAFÉ', 'CAFE', 'CAFÉ DA MANHÃ', 'CAFE DA MANHA', 'ALMOÇO LOCAL', 'ALMOCO LOCAL', 'JANTA LOCAL']")
                     
-                    if tipo_upper in ['CAFÉ', 'CAFE', 'ALMOÇO LOCAL', 'ALMOCO LOCAL', 'JANTA LOCAL']:
+                    if tipo_upper in ['CAFÉ', 'CAFE', 'CAFÉ DA MANHÃ', 'CAFE DA MANHA', 'ALMOÇO LOCAL', 'ALMOCO LOCAL', 'JANTA LOCAL']:
                         aferiu_status = 'NÃO NECESSITA'
-                        print(f"🚫 Tipo '{tipo_refeicao}' não precisa de aferição de temperatura")
+                        print(f"🚫 RESULTADO: Tipo '{tipo_refeicao}' → AFERIU_TEMPERATURA = 'NÃO NECESSITA'")
                     else:
                         aferiu_status = 'NÃO'  # Para MARMITEX e outros que precisam de aferição
-                        print(f"🌡️ Tipo '{tipo_refeicao}' requer aferição de temperatura")
+                        print(f"🌡️ RESULTADO: Tipo '{tipo_refeicao}' → AFERIU_TEMPERATURA = 'NÃO' (requer aferição)")
                     
                     # Atualizar campo AFERIU_TEMPERATURA
                     print(f"🎯 Definindo AFERIU_TEMPERATURA = '{aferiu_status}' para pedido {pedido_id_real}")
