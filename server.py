@@ -890,7 +890,6 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 
                 # 🎯 CAPTURAR AFERIU_TEMPERATURA DO FRONTEND
                 aferiu_temperatura_frontend = pedido_data.get('aferiu_temperatura', '')
-                print(f"🔥 AFERIU_TEMPERATURA recebido do frontend: '{aferiu_temperatura_frontend}'")
                 
                 observacoes = pedido_data.get('observacoes', '')
                 
@@ -918,18 +917,14 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 print(f"   NOME HOTEL: {nome_hotel}")
                 print(f"   VALOR DIÁRIA: R$ {valor_diaria}")
                 print(f"   FECHAMENTO: {fechamento}")
-                print(f"   🎯 AFERIU_TEMPERATURA (frontend): {aferiu_temperatura_frontend}")
                 
-                print(f"🔧 EXECUTANDO QUERY COM PARÂMETROS:")
-                parametros = [data_retirada, projeto, coordenador, supervisor, lider, nome_lider,
-                             fazenda, tipo_refeicao, cidade, fornecedor, valor_pago, 
-                             colaboradores_nomes, total_colaboradores, a_contratar,
-                             responsavel_cartao, pagcorp, hospedado, nome_hotel, valor_diaria,
-                             total_pagar, aprovado_por, observacoes, fechamento, aferiu_temperatura_frontend]
-                print(f"   Total parâmetros: {len(parametros)}")
-                print(f"   AFERIU_TEMPERATURA será: '{aferiu_temperatura_frontend}' ({len(aferiu_temperatura_frontend)} chars)")
-                
-                resultado = executar_query(query, parametros)
+                resultado = executar_query(query, [
+                    data_retirada, projeto, coordenador, supervisor, lider, nome_lider,
+                    fazenda, tipo_refeicao, cidade, fornecedor, valor_pago, 
+                    colaboradores_nomes, total_colaboradores, a_contratar,
+                    responsavel_cartao, pagcorp, hospedado, nome_hotel, valor_diaria,
+                    total_pagar, aprovado_por, observacoes, fechamento, aferiu_temperatura_frontend
+                ])
                 
                 if resultado is not None and isinstance(resultado, dict) and 'inserted_id' in resultado:
                     # Sucesso - retornar o ID real do banco
