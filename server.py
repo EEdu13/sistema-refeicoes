@@ -885,40 +885,87 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     print(f"✅ Pedido salvo com ID real: {pedido_id_real}")
                     
                     # 🔥 DEFINIR STATUS AFERIU_TEMPERATURA BASEADO NO TIPO DE REFEIÇÃO
-                    # Limpar e normalizar o tipo de refeição para comparação mais robusta
-                    import re
-                    tipo_limpo = re.sub(r'[^\w\s]', '', tipo_refeicao.upper().strip())  # Remove acentos e pontuação
-                    tipo_limpo = re.sub(r'\s+', ' ', tipo_limpo)  # Normaliza espaços
+                    # DEBUG COMPLETO - vamos ver EXATAMENTE o que está chegando
+                    print(f"🔍 DEBUG COMPLETO - Dados recebidos:")
+                    print(f"   tipo_refeicao RAW: '{tipo_refeicao}'")
+                    print(f"   tipo_refeicao type: {type(tipo_refeicao)}")
+                    print(f"   tipo_refeicao repr: {repr(tipo_refeicao)}")
+                    print(f"   tipo_refeicao bytes: {tipo_refeicao.encode('utf-8') if isinstance(tipo_refeicao, str) else 'N/A'}")
                     
-                    # Remover acentos manualmente para comparação
-                    tipo_sem_acento = tipo_limpo.replace('Á', 'A').replace('Ã', 'A').replace('Ç', 'C').replace('É', 'E').replace('Ê', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Õ', 'O').replace('Ú', 'U')
+                    # Função robusta para normalizar strings
+                    def normalizar_string(texto):
+                        import unicodedata
+                        import re
+                        
+                        if not texto:
+                            return ""
+                        
+                        # Converter para string se não for
+                        texto = str(texto)
+                        
+                        # Normalizar Unicode (NFD = Normalization Form Decomposed)
+                        texto_nfd = unicodedata.normalize('NFD', texto)
+                        
+                        # Remover diacríticos (acentos)
+                        texto_sem_acento = ''.join(c for c in texto_nfd if unicodedata.category(c) != 'Mn')
+                        
+                        # Converter para maiúsculo
+                        texto_upper = texto_sem_acento.upper().strip()
+                        
+                        # Remover pontuação e caracteres especiais, manter apenas letras e espaços
+                        texto_limpo = re.sub(r'[^A-Z\s]', '', texto_upper)
+                        
+                        # Normalizar espaços múltiplos
+                        texto_final = re.sub(r'\s+', ' ', texto_limpo).strip()
+                        
+                        return texto_final
                     
-                    print(f"🔍 DEBUG - Tipo original: '{tipo_refeicao}'")
-                    print(f"🔍 DEBUG - Tipo limpo: '{tipo_limpo}'")
-                    print(f"🔍 DEBUG - Tipo sem acento: '{tipo_sem_acento}'")
+                    # Normalizar o tipo de refeição
+                    tipo_normalizado = normalizar_string(tipo_refeicao)
                     
-                    # Inicializar aferiu_status com valor padrão
-                    aferiu_status = 'NÃO'  # VALOR PADRÃO para refeições que PRECISAM de aferição
+                    print(f"� APÓS NORMALIZAÇÃO:")
+                    print(f"   Tipo normalizado: '{tipo_normalizado}'")
                     
-                    # Lista COMPLETA de tipos que NÃO NECESSITAM aferição
-                    tipos_nao_necessita = [
-                        'CAFE', 'CAFE DA MANHA', 'CAFE DA MANHÃ',
-                        'ALMOCO LOCAL', 'ALMOCO', 'JANTA LOCAL', 'JANTA'
+                    # Inicializar aferiu_status
+                    aferiu_status = 'NÃO'  # PADRÃO: requer aferição
+                    
+                    # LISTA DEFINITIVA - baseada EXATAMENTE no que o frontend envia
+                    # Frontend envia: 'CAFÉ DA MANHÃ', 'ALMOÇO LOCAL', 'JANTA LOCAL'
+                    tipos_nao_necessita_completos = [
+                        'CAFE DA MANHA',    # Para 'CAFÉ DA MANHÃ' (normalizado)
+                        'ALMOCO LOCAL',     # Para 'ALMOÇO LOCAL' (normalizado)  
+                        'JANTA LOCAL'       # Para 'JANTA LOCAL' (normalizado)
                     ]
                     
-                    # Verificar se o tipo atual NÃO necessita aferição
-                    tipo_encontrado = False
-                    for tipo_comparacao in tipos_nao_necessita:
-                        if tipo_comparacao in tipo_sem_acento:
-                            aferiu_status = 'NÃO NECESSITA'
-                            tipo_encontrado = True
-                            print(f"✅ MATCH ENCONTRADO: '{tipo_sem_acento}' contém '{tipo_comparacao}' → NÃO NECESSITA")
-                            break
+                    print(f"🔍 VERIFICANDO TIPOS COMPLETOS:")
                     
-                    if not tipo_encontrado:
-                        print(f"🌡️ RESULTADO: Tipo '{tipo_refeicao}' → AFERIU_TEMPERATURA = 'NÃO' (requer aferição)")
+                    # Verificar se o tipo normalizado corresponde exatamente
+                    for tipo_esperado in tipos_nao_necessita_completos:
+                        if tipo_esperado == tipo_normalizado:
+                            aferiu_status = 'NAO NECESSITA'  # SEM ACENTOS para evitar problemas
+                            print(f"✅ MATCH EXATO: '{tipo_normalizado}' == '{tipo_esperado}' → NAO NECESSITA")
+                            break
+                        else:
+                            print(f"❌ NO MATCH: '{tipo_normalizado}' != '{tipo_esperado}'")
+                    
+                    # Se não encontrou match exato, tentar palavras-chave
+                    if aferiu_status == 'NÃO':
+                        palavras_nao_necessita = ['CAFE', 'ALMOCO LOCAL', 'JANTA LOCAL']
+                        print(f"🔍 TENTANDO PALAVRAS-CHAVE:")
+                        
+                        for palavra in palavras_nao_necessita:
+                            if palavra in tipo_normalizado:
+                                aferiu_status = 'NAO NECESSITA'
+                                print(f"✅ MATCH PALAVRA: '{tipo_normalizado}' contém '{palavra}' → NAO NECESSITA")
+                                break
+                            else:
+                                print(f"❌ NO MATCH: '{tipo_normalizado}' NÃO contém '{palavra}'")
+                    
+                    # Log final
+                    if aferiu_status == 'NAO NECESSITA':
+                        print(f"🚫 FINAL: '{tipo_refeicao}' → AFERIU_TEMPERATURA = 'NAO NECESSITA'")
                     else:
-                        print(f"🚫 RESULTADO: Tipo '{tipo_refeicao}' → AFERIU_TEMPERATURA = 'NÃO NECESSITA'")
+                        print(f"🌡️ FINAL: '{tipo_refeicao}' → AFERIU_TEMPERATURA = 'NÃO' (requer aferição)")
                     
                     print(f"🎯 VALOR FINAL de aferiu_status: '{aferiu_status}'")
                     
@@ -939,7 +986,8 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                         "tipo_refeicao": tipo_refeicao,
                         "total_pagar": total_pagar,
                         "aferiu_temperatura": aferiu_status,  # SEMPRE incluir este campo
-                        "debug_tipo_processado": tipo_sem_acento,  # DEBUG temporário
+                        "debug_tipo_original": tipo_refeicao,  # DEBUG temporário
+                        "debug_tipo_normalizado": tipo_normalizado,  # DEBUG temporário
                         "debug_aferiu_final": aferiu_status  # DEBUG temporário
                     }
                     print(f"� RESPONSE FINAL: {json.dumps(response, ensure_ascii=False, indent=2)}")  # DEBUG completo
