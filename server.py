@@ -1130,6 +1130,21 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 
                 print(f"📊 Temperaturas E HORAS salvas: {resultado_temp} linhas afetadas")
                 
+                # 🔥 CRÍTICO: ATUALIZAR CAMPO AFERIU_TEMPERATURA PARA "SIM"
+                print("🎯 Atualizando status AFERIU_TEMPERATURA para 'SIM'...")
+                query_status = "UPDATE PEDIDOS SET AFERIU_TEMPERATURA = 'SIM' WHERE ID = %s"
+                resultado_status = executar_query(query_status, [pedido_id])
+                print(f"✅ Campo AFERIU_TEMPERATURA atualizado: {resultado_status} linhas afetadas")
+                
+                # VERIFICAR SE FOI ATUALIZADO CORRETAMENTE
+                verify_query = "SELECT AFERIU_TEMPERATURA FROM PEDIDOS WHERE ID = %s"
+                verify_result = executar_query(verify_query, [pedido_id])
+                if verify_result and len(verify_result) > 0:
+                    status_atual = verify_result[0]['AFERIU_TEMPERATURA']
+                    print(f"🔍 Status atual do campo AFERIU_TEMPERATURA: '{status_atual}'")
+                else:
+                    print("❌ Erro ao verificar status do campo AFERIU_TEMPERATURA")
+                
                 # SEGUNDA PRIORIDADE: UPLOAD DAS IMAGENS (ASSÍNCRONO)
                 url_img_retirada = "processando_upload"
                 url_img_consumo = "processando_upload"
