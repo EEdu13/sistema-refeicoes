@@ -495,28 +495,28 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 query = """
                 SELECT ID, DATA_RETIRADA, NOME_LIDER, TIPO_REFEICAO, FORNECEDOR, 
                        TOTAL_COLABORADORES, TOTAL_PAGAR, DATA_ENVIO1, LIDER,
-                       TEMP_RETIRADA, TEMP_CONSUMO
+                       TEMP_RETIRADA, TEMP_CONSUMO, AFERIU_TEMPERATURA
                 FROM PEDIDOS 
                 WHERE (TIPO_REFEICAO LIKE '%MARMITEX%' OR TIPO_REFEICAO LIKE '%MARMITA%')
-                  AND (TEMP_RETIRADA IS NULL OR TEMP_RETIRADA = '' OR TEMP_CONSUMO IS NULL OR TEMP_CONSUMO = '')
+                  AND (AFERIU_TEMPERATURA IS NULL OR AFERIU_TEMPERATURA = '' OR AFERIU_TEMPERATURA = 'NÃO')
                   AND LIDER = %s
                 ORDER BY DATA_ENVIO1 DESC
                 """
                 query_params_db = [equipe_param]
-                print(f"🔍 Query para equipe específica: {equipe_param}")
+                print(f"🔍 Query para equipe específica: {equipe_param} - só AFERIU_TEMPERATURA = NULL/NÃO")
             else:
                 # Query sem filtro de equipe (comportamento original)
                 query = """
                 SELECT ID, DATA_RETIRADA, NOME_LIDER, TIPO_REFEICAO, FORNECEDOR, 
                        TOTAL_COLABORADORES, TOTAL_PAGAR, DATA_ENVIO1, LIDER,
-                       TEMP_RETIRADA, TEMP_CONSUMO
+                       TEMP_RETIRADA, TEMP_CONSUMO, AFERIU_TEMPERATURA
                 FROM PEDIDOS 
                 WHERE (TIPO_REFEICAO LIKE '%MARMITEX%' OR TIPO_REFEICAO LIKE '%MARMITA%')
-                  AND (TEMP_RETIRADA IS NULL OR TEMP_RETIRADA = '' OR TEMP_CONSUMO IS NULL OR TEMP_CONSUMO = '')
+                  AND (AFERIU_TEMPERATURA IS NULL OR AFERIU_TEMPERATURA = '' OR AFERIU_TEMPERATURA = 'NÃO')
                 ORDER BY DATA_ENVIO1 DESC
                 """
                 query_params_db = []
-                print("🔍 Query para todas as equipes")
+                print("🔍 Query para todas as equipes - só AFERIU_TEMPERATURA = NULL/NÃO")
             
             try:
                 pedidos_pendentes = executar_query(query, query_params_db)
@@ -530,7 +530,8 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     pendencias_formatadas = []
                     for pedido in pedidos_pendentes:
                         equipe_pedido = pedido.get('LIDER', 'N/A')  # Usar LIDER que contém o nome da equipe
-                        print(f"   📋 Pedido ID {pedido['ID']}: {pedido['TIPO_REFEICAO']} - {pedido.get('DATA_RETIRADA', 'N/A')} - Equipe: {equipe_pedido}")
+                        aferiu_status = pedido.get('AFERIU_TEMPERATURA', 'NULL')
+                        print(f"   📋 Pedido ID {pedido['ID']}: {pedido['TIPO_REFEICAO']} - {pedido.get('DATA_RETIRADA', 'N/A')} - Equipe: {equipe_pedido} - Status: {aferiu_status}")
                         
                         # Converter DATA_RETIRADA para string se for datetime
                         data_retirada = pedido.get("DATA_RETIRADA")
@@ -884,7 +885,10 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     print(f"✅ Pedido salvo com ID real: {pedido_id_real}")
                     
                     # 🔥 DEFINIR STATUS AFERIU_TEMPERATURA BASEADO NO TIPO DE REFEIÇÃO
-                    if tipo_refeicao.upper() in ['CAFÉ', 'ALMOÇO LOCAL', 'JANTA LOCAL']:
+                    tipo_upper = tipo_refeicao.upper().strip()
+                    print(f"🔍 Verificando tipo de refeição: '{tipo_upper}'")
+                    
+                    if tipo_upper in ['CAFÉ', 'CAFE', 'ALMOÇO LOCAL', 'ALMOCO LOCAL', 'JANTA LOCAL']:
                         aferiu_status = 'NÃO NECESSITA'
                         print(f"🚫 Tipo '{tipo_refeicao}' não precisa de aferição de temperatura")
                     else:
