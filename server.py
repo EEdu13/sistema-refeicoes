@@ -885,16 +885,42 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     print(f"✅ Pedido salvo com ID real: {pedido_id_real}")
                     
                     # 🔥 DEFINIR STATUS AFERIU_TEMPERATURA BASEADO NO TIPO DE REFEIÇÃO
-                    tipo_upper = tipo_refeicao.upper().strip()
-                    print(f"🔍 DEBUG - Tipo original: '{tipo_refeicao}'")
-                    print(f"🔍 DEBUG - Tipo processado: '{tipo_upper}'")
+                    # Limpar e normalizar o tipo de refeição para comparação mais robusta
+                    import re
+                    tipo_limpo = re.sub(r'[^\w\s]', '', tipo_refeicao.upper().strip())  # Remove acentos e pontuação
+                    tipo_limpo = re.sub(r'\s+', ' ', tipo_limpo)  # Normaliza espaços
                     
-                    if tipo_upper in ['CAFÉ', 'CAFE', 'CAFÉ DA MANHÃ', 'CAFE DA MANHA', 'ALMOÇO LOCAL', 'ALMOCO LOCAL', 'JANTA LOCAL']:
-                        aferiu_status = 'NÃO NECESSITA'
-                        print(f"🚫 RESULTADO: Tipo '{tipo_refeicao}' → AFERIU_TEMPERATURA = 'NÃO NECESSITA'")
-                    else:
-                        aferiu_status = 'NÃO'  # Para MARMITEX e outros que precisam de aferição
+                    # Remover acentos manualmente para comparação
+                    tipo_sem_acento = tipo_limpo.replace('Á', 'A').replace('Ã', 'A').replace('Ç', 'C').replace('É', 'E').replace('Ê', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Õ', 'O').replace('Ú', 'U')
+                    
+                    print(f"🔍 DEBUG - Tipo original: '{tipo_refeicao}'")
+                    print(f"🔍 DEBUG - Tipo limpo: '{tipo_limpo}'")
+                    print(f"🔍 DEBUG - Tipo sem acento: '{tipo_sem_acento}'")
+                    
+                    # Inicializar aferiu_status com valor padrão
+                    aferiu_status = 'NÃO'  # VALOR PADRÃO para refeições que PRECISAM de aferição
+                    
+                    # Lista COMPLETA de tipos que NÃO NECESSITAM aferição
+                    tipos_nao_necessita = [
+                        'CAFE', 'CAFE DA MANHA', 'CAFE DA MANHÃ',
+                        'ALMOCO LOCAL', 'ALMOCO', 'JANTA LOCAL', 'JANTA'
+                    ]
+                    
+                    # Verificar se o tipo atual NÃO necessita aferição
+                    tipo_encontrado = False
+                    for tipo_comparacao in tipos_nao_necessita:
+                        if tipo_comparacao in tipo_sem_acento:
+                            aferiu_status = 'NÃO NECESSITA'
+                            tipo_encontrado = True
+                            print(f"✅ MATCH ENCONTRADO: '{tipo_sem_acento}' contém '{tipo_comparacao}' → NÃO NECESSITA")
+                            break
+                    
+                    if not tipo_encontrado:
                         print(f"🌡️ RESULTADO: Tipo '{tipo_refeicao}' → AFERIU_TEMPERATURA = 'NÃO' (requer aferição)")
+                    else:
+                        print(f"🚫 RESULTADO: Tipo '{tipo_refeicao}' → AFERIU_TEMPERATURA = 'NÃO NECESSITA'")
+                    
+                    print(f"🎯 VALOR FINAL de aferiu_status: '{aferiu_status}'")
                     
                     # Atualizar campo AFERIU_TEMPERATURA (SIMPLIFICADO)
                     print(f"🎯 Definindo AFERIU_TEMPERATURA = '{aferiu_status}' para pedido {pedido_id_real}")
@@ -912,8 +938,11 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                         "pedido_id": pedido_id_real,  # ID real do banco
                         "tipo_refeicao": tipo_refeicao,
                         "total_pagar": total_pagar,
-                        "aferiu_temperatura": aferiu_status  # Incluir status na resposta
+                        "aferiu_temperatura": aferiu_status,  # SEMPRE incluir este campo
+                        "debug_tipo_processado": tipo_sem_acento,  # DEBUG temporário
+                        "debug_aferiu_final": aferiu_status  # DEBUG temporário
                     }
+                    print(f"� RESPONSE FINAL: {json.dumps(response, ensure_ascii=False, indent=2)}")  # DEBUG completo
                 else:
                     print(f"❌ Falha ao inserir - resultado: {resultado}")
                     response = {
