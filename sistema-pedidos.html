@@ -3732,12 +3732,22 @@
             var summary = document.getElementById('orderSummary');
             var content = document.getElementById('summaryContent');
             
-            if (selectedMeals.length > 0 && (selectedEmployees.length > 0 || otherParticipants.length > 0 || naoContratadosCount > 0)) {
+            // Verificar se é pedido avulso e incluir solicitante automaticamente para cálculo
+            const isPedidoAvulso = selectedMeals.length > 0 && selectedEmployees.length === 0 && otherParticipants.length === 0 && naoContratadosCount === 0;
+            
+            if (isPedidoAvulso) {
+                // Para pedidos avulsos, assumir 1 pessoa (o solicitante) no cálculo
+                var totalPeople = 1;
+                var showAvulsoLabel = true;
+            } else {
+                var totalPeople = selectedEmployees.length + otherParticipants.length + naoContratadosCount;
+                var showAvulsoLabel = false;
+            }
+            
+            if (selectedMeals.length > 0 && (selectedEmployees.length > 0 || otherParticipants.length > 0 || naoContratadosCount > 0 || isPedidoAvulso)) {
                 summary.style.display = 'block';
                 var total = 0;
                 var summaryHTML = '';
-                
-                var totalPeople = selectedEmployees.length + otherParticipants.length + naoContratadosCount;
                 
                 var mealDisplayNames = {
                     'cafe': 'Café da Manhã', 'almoco_marmitex': 'Almoço Marmitex',
@@ -3760,9 +3770,10 @@
                     
                     // Mostrar detalhes de pessoas
                     var peopleDetails = '';
-                    var isPedidoAvulso = selectedEmployees.length === 0 && naoContratadosCount === 0;
                     
-                    if (isPedidoAvulso && otherParticipants.length > 0) {
+                    if (showAvulsoLabel) {
+                        peopleDetails = '👤 Pedido Individual';
+                    } else if (isPedidoAvulso && otherParticipants.length > 0) {
                         // Verificar se é um pedido avulso (solicitante individual)
                         const temSolicitanteAvulso = otherParticipants.some(p => p.tipo === 'SOLICITANTE_AVULSO');
                         if (temSolicitanteAvulso) {
