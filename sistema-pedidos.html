@@ -2639,9 +2639,44 @@
         }
 
         async function doSubmitOrder() {
-            if (selectedMeals.length === 0 || (selectedEmployees.length === 0 && otherParticipants.length === 0)) {
-                alert('Selecione pelo menos um tipo de refeição e pelo menos um colaborador ou adicione outros participantes!');
+            if (selectedMeals.length === 0) {
+                alert('Selecione pelo menos um tipo de refeição!');
                 return;
+            }
+
+            // Verificar se é pedido avulso (sem equipe/colaboradores selecionados)
+            const equipeLogada = localStorage.getItem('equipe_logada') || '';
+            const isPedidoAvulso = selectedEmployees.length === 0 && otherParticipants.length === 0 && naoContratadosCount === 0;
+            
+            if (isPedidoAvulso) {
+                console.log('🎯 Pedido AVULSO detectado - incluindo solicitante automaticamente');
+                
+                // Buscar dados do usuário logado
+                const loginData = localStorage.getItem('loginData');
+                if (loginData) {
+                    try {
+                        const dados = JSON.parse(loginData);
+                        const nomeSolicitante = dados.nome || dados.user || 'Usuário';
+                        
+                        // Adicionar o solicitante como participante automaticamente
+                        if (!otherParticipants.find(p => p.nome === nomeSolicitante)) {
+                            otherParticipants.push({
+                                nome: nomeSolicitante,
+                                tipo: 'SOLICITANTE_AVULSO'
+                            });
+                            window.otherParticipants = otherParticipants; // Sincronizar global
+                            console.log(`✅ Solicitante "${nomeSolicitante}" adicionado automaticamente ao pedido avulso`);
+                        }
+                    } catch (e) {
+                        console.error('❌ Erro ao buscar dados do usuário logado:', e);
+                    }
+                }
+                
+                // Re-verificar se agora temos participantes
+                if (selectedEmployees.length === 0 && otherParticipants.length === 0 && naoContratadosCount === 0) {
+                    alert('Não foi possível identificar o solicitante para o pedido avulso. Tente fazer login novamente.');
+                    return;
+                }
             }
 
             // Validar campos obrigatórios
@@ -2736,12 +2771,12 @@
             });
             
             var otherParticipantNames = otherParticipants.map(function(p) {
-                return p.name;
+                return p.nome || p.name; // Aceitar ambos os formatos
             });
             
             var allParticipants = selectedEmployeeNames.concat(otherParticipantNames);
             var participantsText = allParticipants.join(', ');
-            var totalParticipants = allParticipants.length;
+            var totalParticipants = allParticipants.length + (naoContratadosCount || 0);
             
             console.log('📋 DADOS GERAIS:');
             console.log('Data Retirada: ' + withdrawalDate);
@@ -3725,16 +3760,28 @@
                     
                     // Mostrar detalhes de pessoas
                     var peopleDetails = '';
-                    if (selectedEmployees.length > 0) {
-                        peopleDetails += selectedEmployees.length + ' colaborador(es)';
-                    }
-                    if (otherParticipants.length > 0) {
-                        if (selectedEmployees.length > 0) peopleDetails += ' + ';
-                        peopleDetails += otherParticipants.length + ' outro(s)';
-                    }
-                    if (naoContratadosCount > 0) {
-                        if (selectedEmployees.length > 0 || otherParticipants.length > 0) peopleDetails += ' + ';
-                        peopleDetails += naoContratadosCount + ' a contratar';
+                    var isPedidoAvulso = selectedEmployees.length === 0 && naoContratadosCount === 0;
+                    
+                    if (isPedidoAvulso && otherParticipants.length > 0) {
+                        // Verificar se é um pedido avulso (solicitante individual)
+                        const temSolicitanteAvulso = otherParticipants.some(p => p.tipo === 'SOLICITANTE_AVULSO');
+                        if (temSolicitanteAvulso) {
+                            peopleDetails = '👤 Pedido Individual';
+                        } else {
+                            peopleDetails = otherParticipants.length + ' pessoa(s)';
+                        }
+                    } else {
+                        if (selectedEmployees.length > 0) {
+                            peopleDetails += selectedEmployees.length + ' colaborador(es)';
+                        }
+                        if (otherParticipants.length > 0) {
+                            if (selectedEmployees.length > 0) peopleDetails += ' + ';
+                            peopleDetails += otherParticipants.length + ' outro(s)';
+                        }
+                        if (naoContratadosCount > 0) {
+                            if (selectedEmployees.length > 0 || otherParticipants.length > 0) peopleDetails += ' + ';
+                            peopleDetails += naoContratadosCount + ' a contratar';
+                        }
                     }
                     
                     summaryHTML += '<div class="summary-line">' +
