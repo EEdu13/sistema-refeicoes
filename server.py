@@ -883,12 +883,27 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     pedido_id_real = resultado['inserted_id']
                     print(f"✅ Pedido salvo com ID real: {pedido_id_real}")
                     
+                    # 🔥 DEFINIR STATUS AFERIU_TEMPERATURA BASEADO NO TIPO DE REFEIÇÃO
+                    if tipo_refeicao.upper() in ['CAFÉ', 'ALMOÇO LOCAL', 'JANTA LOCAL']:
+                        aferiu_status = 'NÃO NECESSITA'
+                        print(f"🚫 Tipo '{tipo_refeicao}' não precisa de aferição de temperatura")
+                    else:
+                        aferiu_status = 'NÃO'  # Para MARMITEX e outros que precisam de aferição
+                        print(f"🌡️ Tipo '{tipo_refeicao}' requer aferição de temperatura")
+                    
+                    # Atualizar campo AFERIU_TEMPERATURA
+                    print(f"🎯 Definindo AFERIU_TEMPERATURA = '{aferiu_status}' para pedido {pedido_id_real}")
+                    query_aferiu = "UPDATE PEDIDOS SET AFERIU_TEMPERATURA = %s WHERE ID = %s"
+                    resultado_aferiu = executar_query(query_aferiu, [aferiu_status, pedido_id_real])
+                    print(f"✅ Campo AFERIU_TEMPERATURA atualizado: {resultado_aferiu} linhas afetadas")
+                    
                     response = {
                         "error": False,
                         "message": "Pedido salvo com sucesso!",
                         "pedido_id": pedido_id_real,  # ID real do banco
                         "tipo_refeicao": tipo_refeicao,
-                        "total_pagar": total_pagar
+                        "total_pagar": total_pagar,
+                        "aferiu_temperatura": aferiu_status  # Incluir status na resposta
                     }
                 else:
                     print(f"❌ Falha ao inserir - resultado: {resultado}")
@@ -993,54 +1008,23 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 
         elif path == '/api/aferição-temperatura' or path == '/api/afericao-temperatura':
             # Endpoint para aferição de temperatura com imagens (suporte a URLs com e sem acentos)
-            print("🌡️ Recebendo aferição de temperatura...")
             try:
                 content_length = int(self.headers['Content-Length'])
                 post_data = self.rfile.read(content_length)
                 aferição_data = json.loads(post_data.decode('utf-8'))
                 
-                print(f"📋 Dados recebidos: {aferição_data.keys()}")
-                
                 pedido_id = aferição_data['pedido_id']
                 temperatura_retirada = aferição_data['temperatura_retirada']
                 temperatura_consumo = aferição_data['temperatura_consumo']
-                hora_retirada = aferição_data.get('hora_retirada')  # NOVO: Hora da retirada
-                hora_consumo = aferição_data.get('hora_consumo')    # NOVO: Hora do consumo
+                hora_retirada = aferição_data.get('hora_retirada')
+                hora_consumo = aferição_data.get('hora_consumo')
                 img_retirada_base64 = aferição_data.get('img_retirada')
                 img_consumo_base64 = aferição_data.get('img_consumo')
                 observacoes = aferição_data.get('observacoes', '')
                 
-                print(f"🆔 Pedido ID: {pedido_id}")
-                print(f"🌡️ Temp. Retirada: {temperatura_retirada}°C")
-                print(f"🌡️ Temp. Consumo: {temperatura_consumo}°C")
-                print(f"🕐 Hora Retirada: {hora_retirada}")      # NOVO LOG
-                print(f"🕐 Hora Consumo: {hora_consumo}")        # NOVO LOG
-                print(f"🔍 Tipo hora_retirada: {type(hora_retirada)}")  # DEBUG
-                print(f"🔍 Tipo hora_consumo: {type(hora_consumo)}")    # DEBUG
+                print(f"️ Salvando temperaturas - Pedido: {pedido_id}, Retirada: {temperatura_retirada}°C, Consumo: {temperatura_consumo}°C")
                 
-                # Log detalhado das imagens
-                if img_retirada_base64:
-                    print(f"📷 Imagem Retirada: SIM ({len(img_retirada_base64)} chars)")
-                    if img_retirada_base64.startswith('data:'):
-                        print(f"   ✅ Formato correto: {img_retirada_base64[:50]}...")
-                    else:
-                        print(f"   ⚠️ Sem prefixo data: {img_retirada_base64[:50]}...")
-                else:
-                    print(f"📷 Imagem Retirada: NÃO ENVIADA")
-                
-                if img_consumo_base64:
-                    print(f"📷 Imagem Consumo: SIM ({len(img_consumo_base64)} chars)")
-                    if img_consumo_base64.startswith('data:'):
-                        print(f"   ✅ Formato correto: {img_consumo_base64[:50]}...")
-                    else:
-                        print(f"   ⚠️ Sem prefixo data: {img_consumo_base64[:50]}...")
-                else:
-                    print(f"📷 Imagem Consumo: NÃO ENVIADA")
-                
-                # PRIMEIRA PRIORIDADE: SALVAR TEMPERATURAS NO BANCO IMEDIATAMENTE
-                print("💾 Salvando temperaturas no banco de dados PRIMEIRO...")
-                
-                # Verificar se a tabela tem as colunas de temperatura
+                # Verificar/criar colunas de temperatura se necessário
                 check_columns_query = """
                 SELECT COLUMN_NAME 
                 FROM INFORMATION_SCHEMA.COLUMNS 
@@ -1049,12 +1033,8 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 """
                 
                 colunas_existentes = executar_query(check_columns_query, [])
-                print(f"🔍 Colunas de temperatura encontradas: {[col['COLUMN_NAME'] for col in colunas_existentes] if colunas_existentes else 'Nenhuma'}")
                 
-                # Se as colunas não existem, criar elas
                 if not colunas_existentes or len(colunas_existentes) < 3:
-                    print("� Criando colunas de temperatura na tabela PEDIDOS...")
-                    
                     alter_queries = [
                         "ALTER TABLE PEDIDOS ADD TEMPERATURA_RETIRADA FLOAT NULL",
                         "ALTER TABLE PEDIDOS ADD TEMPERATURA_CONSUMO FLOAT NULL", 
@@ -1063,12 +1043,11 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     
                     for alter_query in alter_queries:
                         try:
-                            resultado_alter = executar_query(alter_query, [])
-                            print(f"✅ Coluna criada: {alter_query.split('ADD ')[1].split(' ')[0]}")
-                        except Exception as e:
-                            print(f"⚠️ Coluna já existe ou erro: {e}")
+                            executar_query(alter_query, [])
+                        except:
+                            pass  # Coluna já existe
                 
-                # Atualizar temperaturas no banco (SEM IMAGENS PRIMEIRO)
+                # Atualizar temperaturas no banco
                 query_temp = """
                 UPDATE PEDIDOS 
                 SET TEMPERATURA_RETIRADA = %s, 
@@ -1079,45 +1058,36 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 WHERE ID = %s
                 """
                 
-                # Converter horas para formato datetime2 do SQL Server
+                # Processar horas
                 from datetime import datetime, date
                 hora_retirada_dt = None
                 hora_consumo_dt = None
                 
-                # BUSCAR A DATA DE RETIRADA DO PEDIDO NO BANCO
+                # Buscar data do pedido
                 query_data = "SELECT DATA_RETIRADA FROM PEDIDOS WHERE ID = %s"
                 resultado_data = executar_query(query_data, [pedido_id])
                 
                 if resultado_data and len(resultado_data) > 0:
                     data_retirada_pedido = resultado_data[0]['DATA_RETIRADA']
-                    print(f"📅 Data do pedido encontrada: {data_retirada_pedido}")
-                    
-                    # Se a data_retirada_pedido for datetime, extrair apenas a data
                     if hasattr(data_retirada_pedido, 'date'):
                         data_retirada_pedido = data_retirada_pedido.date()
-                        print(f"📅 Data extraída: {data_retirada_pedido}")
                 else:
-                    # Fallback para data atual se não encontrar
                     data_retirada_pedido = date.today()
-                    print(f"⚠️ Data do pedido não encontrada, usando data atual: {data_retirada_pedido}")
                 
+                # Converter horas para datetime
                 if hora_retirada:
                     try:
-                        # Combinar data do pedido + hora informada
                         hora_obj = datetime.strptime(hora_retirada, '%H:%M').time()
                         hora_retirada_dt = datetime.combine(data_retirada_pedido, hora_obj)
-                        print(f"🕐 Hora Retirada convertida: {hora_retirada_dt}")
-                    except Exception as e:
-                        print(f"❌ Erro ao converter hora_retirada: {e}")
+                    except:
+                        pass
                 
                 if hora_consumo:
                     try:
-                        # Combinar data do pedido + hora informada
                         hora_obj = datetime.strptime(hora_consumo, '%H:%M').time()
                         hora_consumo_dt = datetime.combine(data_retirada_pedido, hora_obj)
-                        print(f"🕐 Hora Consumo convertida: {hora_consumo_dt}")
-                    except Exception as e:
-                        print(f"❌ Erro ao converter hora_consumo: {e}")
+                    except:
+                        pass
                 
                 resultado_temp = executar_query(query_temp, [
                     temperatura_retirada,
@@ -1128,71 +1098,41 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     pedido_id
                 ])
                 
-                print(f"📊 Temperaturas E HORAS salvas: {resultado_temp} linhas afetadas")
+                print(f"✅ Temperaturas salvas: {resultado_temp} linhas afetadas")
                 
-                # 🔥 CRÍTICO: ATUALIZAR CAMPO AFERIU_TEMPERATURA PARA "SIM"
-                print("🎯 Atualizando status AFERIU_TEMPERATURA para 'SIM'...")
+                # 🔥 ATUALIZAR CAMPO AFERIU_TEMPERATURA PARA "SIM"
                 query_status = "UPDATE PEDIDOS SET AFERIU_TEMPERATURA = 'SIM' WHERE ID = %s"
                 resultado_status = executar_query(query_status, [pedido_id])
-                print(f"✅ Campo AFERIU_TEMPERATURA atualizado: {resultado_status} linhas afetadas")
+                print(f"✅ AFERIU_TEMPERATURA atualizado para 'SIM': {resultado_status} linhas afetadas")
                 
-                # VERIFICAR SE FOI ATUALIZADO CORRETAMENTE
-                verify_query = "SELECT AFERIU_TEMPERATURA FROM PEDIDOS WHERE ID = %s"
-                verify_result = executar_query(verify_query, [pedido_id])
-                if verify_result and len(verify_result) > 0:
-                    status_atual = verify_result[0]['AFERIU_TEMPERATURA']
-                    print(f"🔍 Status atual do campo AFERIU_TEMPERATURA: '{status_atual}'")
-                else:
-                    print("❌ Erro ao verificar status do campo AFERIU_TEMPERATURA")
-                
-                # SEGUNDA PRIORIDADE: UPLOAD DAS IMAGENS (ASSÍNCRONO)
-                url_img_retirada = "processando_upload"
-                url_img_consumo = "processando_upload"
-                
-                # Fazer upload das imagens em paralelo (sem bloquear a resposta)
+                # Upload das imagens em background
                 import threading
                 
                 def upload_async():
-                    nonlocal url_img_retirada, url_img_consumo
-                    
                     if img_retirada_base64:
-                        print("☁️ Upload assíncrono da imagem de retirada...")
                         url_img_retirada = upload_imagem_blob(
                             img_retirada_base64, 
                             f"retirada_pedido_{pedido_id}.jpg"
                         )
                     
                     if img_consumo_base64:
-                        print("☁️ Upload assíncrono da imagem de consumo...")
                         url_img_consumo = upload_imagem_blob(
                             img_consumo_base64, 
                             f"consumo_pedido_{pedido_id}.jpg"
                         )
                     
                     # Atualizar URLs no banco após upload
-                    if url_img_retirada and url_img_consumo:
-                        query_img = """
-                        UPDATE PEDIDOS 
-                        SET IMG_RETIRADA = %s, 
-                            IMG_CONSUMO = %s
-                        WHERE ID = %s
-                        """
-                        
-                        resultado_img = executar_query(query_img, [
-                            url_img_retirada,
-                            url_img_consumo,
-                            pedido_id
-                        ])
-                        print(f"� URLs das imagens atualizadas: {resultado_img} linhas afetadas")
+                    if 'url_img_retirada' in locals() and 'url_img_consumo' in locals():
+                        query_img = "UPDATE PEDIDOS SET IMG_RETIRADA = %s, IMG_CONSUMO = %s WHERE ID = %s"
+                        executar_query(query_img, [url_img_retirada, url_img_consumo, pedido_id])
                 
-                # Iniciar upload em thread separada (não bloqueia a resposta)
+                # Iniciar upload em thread separada
                 if img_retirada_base64 or img_consumo_base64:
                     upload_thread = threading.Thread(target=upload_async)
                     upload_thread.daemon = True
                     upload_thread.start()
-                    print("🚀 Upload das imagens iniciado em background")
                 
-                # RESPOSTA IMEDIATA (sem esperar upload das imagens)
+                # Resposta imediata
                 if resultado_temp is not None and resultado_temp > 0:
                     response = {
                         "error": False,
@@ -1208,7 +1148,6 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                             "consumo": "upload_iniciado"
                         }
                     }
-                    print("✅ Resposta enviada imediatamente - upload continua em background")
                 else:
                     response = {
                         "error": True,
