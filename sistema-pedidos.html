@@ -3099,15 +3099,15 @@
         async function doSaveTemperatureComplete() {
             console.log('🚀 Iniciando salvamento de temperatura...');
             
-            // Buscar o botão e mostrar loading
-            const saveButton = document.querySelector('button[onclick="doSaveTemperatureComplete()"]');
-            const originalButtonText = saveButton ? saveButton.innerHTML : '';
+            // Mostrar loading overlay igual ao envio de pedidos
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const loadingText = document.querySelector('.loading-text');
+            const loadingSubtitle = document.querySelector('.loading-subtitle');
             
-            if (saveButton) {
-                saveButton.disabled = true;
-                saveButton.innerHTML = '⏳ Enviando aferição...';
-                saveButton.style.opacity = '0.6';
-                saveButton.style.cursor = 'not-allowed';
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'flex';
+                if (loadingText) loadingText.textContent = '🌡️ Enviando aferição...';
+                if (loadingSubtitle) loadingSubtitle.textContent = 'Processando dados de temperatura';
             }
             
             try {
@@ -3123,48 +3123,28 @@
                 const horaConsumo = document.getElementById('horaConsumo').value;
                 const observacoesGerais = document.getElementById('observacoesGerais').value;
                 
-                // Validações (com restauração do botão se falhar)
+                // Validações (com esconder loading se falhar)
                 if (!tempRetirada) {
                     alert('Por favor, informe a temperatura de retirada!');
-                    if (saveButton) {
-                        saveButton.disabled = false;
-                        saveButton.innerHTML = originalButtonText;
-                        saveButton.style.opacity = '1';
-                        saveButton.style.cursor = 'pointer';
-                    }
+                    if (loadingOverlay) loadingOverlay.style.display = 'none';
                     return;
                 }
                 
                 if (!tempConsumo) {
                     alert('Por favor, informe a temperatura de consumo!');
-                    if (saveButton) {
-                        saveButton.disabled = false;
-                        saveButton.innerHTML = originalButtonText;
-                        saveButton.style.opacity = '1';
-                        saveButton.style.cursor = 'pointer';
-                    }
+                    if (loadingOverlay) loadingOverlay.style.display = 'none';
                     return;
                 }
 
                 if (!horaRetirada) {
                     alert('Por favor, informe a hora da retirada!');
-                    if (saveButton) {
-                        saveButton.disabled = false;
-                        saveButton.innerHTML = originalButtonText;
-                        saveButton.style.opacity = '1';
-                        saveButton.style.cursor = 'pointer';
-                    }
+                    if (loadingOverlay) loadingOverlay.style.display = 'none';
                     return;
                 }
                 
                 if (!horaConsumo) {
                     alert('Por favor, informe a hora do consumo!');
-                    if (saveButton) {
-                        saveButton.disabled = false;
-                        saveButton.innerHTML = originalButtonText;
-                        saveButton.style.opacity = '1';
-                        saveButton.style.cursor = 'pointer';
-                    }
+                    if (loadingOverlay) loadingOverlay.style.display = 'none';
                     return;
                 }
                 
@@ -3179,23 +3159,13 @@
                 
                 if (!imgRetirada) {
                     alert('❌ Por favor, tire uma foto da retirada!\n\nDica: Clique em "📷 Tirar Foto" e selecione uma imagem.');
-                    if (saveButton) {
-                        saveButton.disabled = false;
-                        saveButton.innerHTML = originalButtonText;
-                        saveButton.style.opacity = '1';
-                        saveButton.style.cursor = 'pointer';
-                    }
+                    if (loadingOverlay) loadingOverlay.style.display = 'none';
                     return;
                 }
                 
                 if (!imgConsumo) {
                     alert('❌ Por favor, tire uma foto do consumo!\n\nDica: Clique em "📷 Tirar Foto" e selecione uma imagem.');
-                    if (saveButton) {
-                        saveButton.disabled = false;
-                        saveButton.innerHTML = originalButtonText;
-                        saveButton.style.opacity = '1';
-                        saveButton.style.cursor = 'pointer';
-                    }
+                    if (loadingOverlay) loadingOverlay.style.display = 'none';
                     return;
                 }
             
@@ -3247,6 +3217,11 @@
                           `🌡️ Retirada: ${tempRetirada}°C\n` +
                           `🌡️ Consumo: ${tempConsumo}°C\n` +
                           `📷 Imagens enviadas para o Azure Blob`);
+                    
+                    // Esconder loading overlay após sucesso
+                    if (loadingOverlay) {
+                        loadingOverlay.style.display = 'none';
+                    }
                     
                     // Remover IMEDIATAMENTE da lista local para feedback visual instantâneo
                     pendingTemperatures = pendingTemperatures.filter(item => item.id != currentTempData.id);
@@ -3303,6 +3278,11 @@
                   `🌡️ Consumo: ${tempConsumo}°C\n` +
                   `📷 Fotos salvas localmente`);
             
+            // Esconder loading overlay após salvamento offline
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'none';
+            }
+            
             // Remover IMEDIATAMENTE da lista local também para offline
             pendingTemperatures = pendingTemperatures.filter(item => item.id != currentTempData.id);
             updatePendingTemperaturesList();
@@ -3314,12 +3294,9 @@
             console.error('❌ Erro geral no salvamento:', error);
             alert('❌ Erro inesperado ao salvar aferição: ' + error.message);
         } finally {
-            // Sempre restaurar o botão ao final
-            if (saveButton) {
-                saveButton.disabled = false;
-                saveButton.innerHTML = originalButtonText;
-                saveButton.style.opacity = '1';
-                saveButton.style.cursor = 'pointer';
+            // Sempre esconder o loading overlay ao final
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'none';
             }
         }
     }
