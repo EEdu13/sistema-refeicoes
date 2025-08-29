@@ -1609,9 +1609,9 @@
                 font-size: 16px; /* Evita zoom automático no iOS */
                 border-radius: 12px;
                 max-width: 100%;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
+                /* overflow: hidden; REMOVIDO - permite nome completo */
+                /* text-overflow: ellipsis; REMOVIDO - permite nome completo */
+                /* white-space: nowrap; REMOVIDO - permite quebra de linha */
                 line-height: 1.3;
                 -webkit-appearance: none;
                 appearance: none;
@@ -1626,12 +1626,13 @@
                 padding: 12px 15px;
                 font-size: 16px;
                 max-width: 100%;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
+                /* overflow: hidden; REMOVIDO - permite nome completo */
+                /* text-overflow: ellipsis; REMOVIDO - permite nome completo */
+                /* white-space: nowrap; REMOVIDO - permite quebra de linha */
                 line-height: 1.4;
                 background: white;
                 color: #374151;
+                word-wrap: break-word; /* Quebra palavras longas se necessário */
             }
             
             /* Específico para iOS - remove todos os estilos nativos */
@@ -3098,57 +3099,105 @@
         async function doSaveTemperatureComplete() {
             console.log('🚀 Iniciando salvamento de temperatura...');
             
-            // DEBUG: Verificar estado das variáveis globais
-            console.log('🔍 Estado das variáveis globais:');
-            console.log('   - globalImageRetirada:', !!globalImageRetirada, globalImageRetirada ? `(${globalImageRetirada.length} chars)` : '');
-            console.log('   - globalImageConsumo:', !!globalImageConsumo, globalImageConsumo ? `(${globalImageConsumo.length} chars)` : '');
-            console.log('   - Timestamps:', imageTimestamps);
+            // Buscar o botão e mostrar loading
+            const saveButton = document.querySelector('button[onclick="doSaveTemperatureComplete()"]');
+            const originalButtonText = saveButton ? saveButton.innerHTML : '';
             
-            const tempRetirada = document.getElementById('temperatureRetirada').value;
-            const tempConsumo = document.getElementById('temperatureConsumo').value;
-            const horaRetirada = document.getElementById('horaRetirada').value;
-            const horaConsumo = document.getElementById('horaConsumo').value;
-            const observacoesGerais = document.getElementById('observacoesGerais').value;
-            
-            // Validações
-            if (!tempRetirada) {
-                alert('Por favor, informe a temperatura de retirada!');
-                return;
+            if (saveButton) {
+                saveButton.disabled = true;
+                saveButton.innerHTML = '⏳ Enviando aferição...';
+                saveButton.style.opacity = '0.6';
+                saveButton.style.cursor = 'not-allowed';
             }
             
-            if (!tempConsumo) {
-                alert('Por favor, informe a temperatura de consumo!');
-                return;
-            }
+            try {
+                // DEBUG: Verificar estado das variáveis globais
+                console.log('🔍 Estado das variáveis globais:');
+                console.log('   - globalImageRetirada:', !!globalImageRetirada, globalImageRetirada ? `(${globalImageRetirada.length} chars)` : '');
+                console.log('   - globalImageConsumo:', !!globalImageConsumo, globalImageConsumo ? `(${globalImageConsumo.length} chars)` : '');
+                console.log('   - Timestamps:', imageTimestamps);
+                
+                const tempRetirada = document.getElementById('temperatureRetirada').value;
+                const tempConsumo = document.getElementById('temperatureConsumo').value;
+                const horaRetirada = document.getElementById('horaRetirada').value;
+                const horaConsumo = document.getElementById('horaConsumo').value;
+                const observacoesGerais = document.getElementById('observacoesGerais').value;
+                
+                // Validações (com restauração do botão se falhar)
+                if (!tempRetirada) {
+                    alert('Por favor, informe a temperatura de retirada!');
+                    if (saveButton) {
+                        saveButton.disabled = false;
+                        saveButton.innerHTML = originalButtonText;
+                        saveButton.style.opacity = '1';
+                        saveButton.style.cursor = 'pointer';
+                    }
+                    return;
+                }
+                
+                if (!tempConsumo) {
+                    alert('Por favor, informe a temperatura de consumo!');
+                    if (saveButton) {
+                        saveButton.disabled = false;
+                        saveButton.innerHTML = originalButtonText;
+                        saveButton.style.opacity = '1';
+                        saveButton.style.cursor = 'pointer';
+                    }
+                    return;
+                }
 
-            if (!horaRetirada) {
-                alert('Por favor, informe a hora da retirada!');
-                return;
-            }
-            
-            if (!horaConsumo) {
-                alert('Por favor, informe a hora do consumo!');
-                return;
-            }
-            
-            // Obter imagens em base64
-            console.log('🔍 Tentando capturar imagens...');
-            const imgRetirada = getImageBase64('Retirada');
-            const imgConsumo = getImageBase64('Consumo');
-            
-            console.log('📷 Resultado da captura:');
-            console.log('   Retirada:', imgRetirada ? 'CAPTURADA' : 'NÃO CAPTURADA');
-            console.log('   Consumo:', imgConsumo ? 'CAPTURADA' : 'NÃO CAPTURADA');
-            
-            if (!imgRetirada) {
-                alert('❌ Por favor, tire uma foto da retirada!\n\nDica: Clique em "📷 Tirar Foto" e selecione uma imagem.');
-                return;
-            }
-            
-            if (!imgConsumo) {
-                alert('❌ Por favor, tire uma foto do consumo!\n\nDica: Clique em "📷 Tirar Foto" e selecione uma imagem.');
-                return;
-            }
+                if (!horaRetirada) {
+                    alert('Por favor, informe a hora da retirada!');
+                    if (saveButton) {
+                        saveButton.disabled = false;
+                        saveButton.innerHTML = originalButtonText;
+                        saveButton.style.opacity = '1';
+                        saveButton.style.cursor = 'pointer';
+                    }
+                    return;
+                }
+                
+                if (!horaConsumo) {
+                    alert('Por favor, informe a hora do consumo!');
+                    if (saveButton) {
+                        saveButton.disabled = false;
+                        saveButton.innerHTML = originalButtonText;
+                        saveButton.style.opacity = '1';
+                        saveButton.style.cursor = 'pointer';
+                    }
+                    return;
+                }
+                
+                // Obter imagens em base64
+                console.log('🔍 Tentando capturar imagens...');
+                const imgRetirada = getImageBase64('Retirada');
+                const imgConsumo = getImageBase64('Consumo');
+                
+                console.log('📷 Resultado da captura:');
+                console.log('   Retirada:', imgRetirada ? 'CAPTURADA' : 'NÃO CAPTURADA');
+                console.log('   Consumo:', imgConsumo ? 'CAPTURADA' : 'NÃO CAPTURADA');
+                
+                if (!imgRetirada) {
+                    alert('❌ Por favor, tire uma foto da retirada!\n\nDica: Clique em "📷 Tirar Foto" e selecione uma imagem.');
+                    if (saveButton) {
+                        saveButton.disabled = false;
+                        saveButton.innerHTML = originalButtonText;
+                        saveButton.style.opacity = '1';
+                        saveButton.style.cursor = 'pointer';
+                    }
+                    return;
+                }
+                
+                if (!imgConsumo) {
+                    alert('❌ Por favor, tire uma foto do consumo!\n\nDica: Clique em "📷 Tirar Foto" e selecione uma imagem.');
+                    if (saveButton) {
+                        saveButton.disabled = false;
+                        saveButton.innerHTML = originalButtonText;
+                        saveButton.style.opacity = '1';
+                        saveButton.style.cursor = 'pointer';
+                    }
+                    return;
+                }
             
             // Usar ID real do banco de dados (não precisa converter)
             const pedidoIdReal = currentTempData.id; // ID real da tabela PEDIDOS
@@ -3199,12 +3248,12 @@
                           `🌡️ Consumo: ${tempConsumo}°C\n` +
                           `📷 Imagens enviadas para o Azure Blob`);
                     
-                    // Remover diretamente da lista local para atualização imediata
+                    // Remover IMEDIATAMENTE da lista local para feedback visual instantâneo
                     pendingTemperatures = pendingTemperatures.filter(item => item.id != currentTempData.id);
                     updatePendingTemperaturesList();
-                    console.log('✅ Pendência removida da lista local');
+                    console.log('✅ Pendência removida IMEDIATAMENTE da lista local');
                     
-                    // Remover da lista de pendências - sucesso online (com delay)
+                    // Remover da lista de pendências - sucesso online (sem delay para melhor UX)
                     removePendingTemperature(currentTempData.id, true);
                     doShowMain();
                     return;
@@ -3254,21 +3303,37 @@
                   `🌡️ Consumo: ${tempConsumo}°C\n` +
                   `📷 Fotos salvas localmente`);
             
-            // Não remover da lista - apenas atualizar interface para mostrar indicador
+            // Remover IMEDIATAMENTE da lista local também para offline
+            pendingTemperatures = pendingTemperatures.filter(item => item.id != currentTempData.id);
             updatePendingTemperaturesList();
+            console.log('✅ Pendência removida da lista local (modo offline)');
+            
             doShowMain();
+            
+        } catch (error) {
+            console.error('❌ Erro geral no salvamento:', error);
+            alert('❌ Erro inesperado ao salvar aferição: ' + error.message);
+        } finally {
+            // Sempre restaurar o botão ao final
+            if (saveButton) {
+                saveButton.disabled = false;
+                saveButton.innerHTML = originalButtonText;
+                saveButton.style.opacity = '1';
+                saveButton.style.cursor = 'pointer';
+            }
         }
+    }
         
         // Função para remover pendência de temperatura
         function removePendingTemperature(pendingId, onlineSuccess = false) {
             console.log('🗑️ Removendo pendência de temperatura:', pendingId, 'Online:', onlineSuccess);
             
             if (onlineSuccess) {
-                // Sucesso online - aguardar um pouco antes de recarregar para dar tempo do banco atualizar
+                // Sucesso online - recarregar mais rapidamente para dar tempo do banco atualizar
                 setTimeout(() => {
                     loadPendingTemperatures();
-                    console.log('✅ Lista de pendências recarregada do banco');
-                }, 3000); // Aguardar 3 segundos
+                    console.log('✅ Lista de pendências recarregada do banco (modo rápido)');
+                }, 1000); // Reduzido de 3000 para 1000ms para melhor UX
             } else {
                 // Salvou offline - apenas atualizar a interface para mostrar indicador de sincronização
                 updatePendingTemperaturesList();
