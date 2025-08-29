@@ -2778,6 +2778,12 @@
             var participantsText = allParticipants.join(', ');
             var totalParticipants = allParticipants.length + (naoContratadosCount || 0);
             
+            // Garantir que pedidos avulsos sempre tenham pelo menos 1 participante
+            if (totalParticipants === 0 && selectedMeals.length > 0) {
+                totalParticipants = 1;
+                console.log('🎯 Pedido avulso detectado - ajustando totalParticipants para 1');
+            }
+            
             console.log('📋 DADOS GERAIS:');
             console.log('Data Retirada: ' + withdrawalDate);
             console.log('Cidade: ' + serviceCity);
@@ -7179,8 +7185,8 @@ var templateParams = {
                 
                 // Adicionar "OUTROS PARTICIPANTES" do array dinâmico aos nomes
                 if (window.otherParticipants && window.otherParticipants.length > 0) {
-                    // Adicionar cada nome do array dinâmico
-                    const outrosNomes = window.otherParticipants.map(p => p.name).filter(nome => nome && nome.trim());
+                    // Adicionar cada nome do array dinâmico (aceitar ambos os formatos)
+                    const outrosNomes = window.otherParticipants.map(p => p.nome || p.name).filter(nome => nome && nome.trim());
                     colaboradoresSelecionados.push(...outrosNomes);
                     console.log(`📝 OUTROS PARTICIPANTES: ${outrosNomes.join(', ')}`);
                 }
@@ -7189,7 +7195,13 @@ var templateParams = {
                 
                 // TOTAL COLABORADORES = selecionados + A_CONTRATAR + outros participantes
                 const totalOutros = window.otherParticipants ? window.otherParticipants.length : 0;
-                const totalColaboradoresFinal = colaboradoresSelecionados.length + naoContratadosCountAtual;
+                let totalColaboradoresFinal = colaboradoresSelecionados.length + naoContratadosCountAtual;
+                
+                // Garantir que pedidos avulsos sempre tenham pelo menos 1 colaborador
+                if (totalColaboradoresFinal === 0) {
+                    totalColaboradoresFinal = 1;
+                    console.log('🎯 Pedido avulso detectado - ajustando totalColaboradoresFinal para 1');
+                }
                 
                 console.log(`👥 COLABORADORES FINAIS: ${colaboradoresSelecionados.length - totalOutros} selecionados + ${totalOutros} outros + ${naoContratadosCountAtual} a contratar = ${totalColaboradoresFinal} total`);
                 console.log(`📝 NOMES: "${colaboradoresNomesLimpos}"`);
