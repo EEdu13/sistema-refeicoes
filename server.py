@@ -782,15 +782,15 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 else:
                     print("⚠️ Não foi possível obter estrutura da tabela")
                 
-                # Query COMPLETA com todos os campos disponíveis + APROVADO_POR + FECHAMENTO
+                # Query COMPLETA com todos os campos disponíveis + APROVADO_POR + FECHAMENTO + AFERIU_TEMPERATURA
                 query = """
                 INSERT INTO PEDIDOS (
                     DATA_RETIRADA, DATA_ENVIO1, PROJETO, COORDENADOR, SUPERVISOR, 
                     LIDER, NOME_LIDER, FAZENDA, TIPO_REFEICAO, CIDADE_PRESTACAO_DO_SERVICO,
                     FORNECEDOR, VALOR_PAGO, COLABORADORES, TOTAL_COLABORADORES, A_CONTRATAR,
                     RESPONSAVEL_PELO_CARTAO, PAGCORP, HOSPEDADO, NOME_DO_HOTEL, VALOR_DIARIA,
-                    TOTAL_PAGAR, APROVADO_POR, OBSERVACOES, FECHAMENTO
-                ) VALUES (%s, DATEADD(hour, -6, GETUTCDATE()), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    TOTAL_PAGAR, APROVADO_POR, OBSERVACOES, FECHAMENTO, AFERIU_TEMPERATURA
+                ) VALUES (%s, DATEADD(hour, -6, GETUTCDATE()), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 
                 # Extrair TODOS os dados do pedido com MAPEAMENTO CORRETO
@@ -844,6 +844,10 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 # FECHAMENTO = Da tabela de fornecedores
                 fechamento = pedido_data.get('fechamento_fornecedor', '')
                 
+                # 🎯 CAPTURAR AFERIU_TEMPERATURA DO FRONTEND
+                aferiu_temperatura_frontend = pedido_data.get('aferiu_temperatura', '')
+                print(f"🔥 AFERIU_TEMPERATURA recebido do frontend: '{aferiu_temperatura_frontend}'")
+                
                 observacoes = pedido_data.get('observacoes', '')
                 
                 # Calcular total a pagar: APENAS VALOR_PAGO × TOTAL_COLABORADORES (SEM DIÁRIA)
@@ -870,13 +874,14 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 print(f"   NOME HOTEL: {nome_hotel}")
                 print(f"   VALOR DIÁRIA: R$ {valor_diaria}")
                 print(f"   FECHAMENTO: {fechamento}")
+                print(f"   🎯 AFERIU_TEMPERATURA (frontend): {aferiu_temperatura_frontend}")
                 
                 resultado = executar_query(query, [
                     data_retirada, projeto, coordenador, supervisor, lider, nome_lider,
                     fazenda, tipo_refeicao, cidade, fornecedor, valor_pago, 
                     colaboradores_nomes, total_colaboradores, a_contratar,
                     responsavel_cartao, pagcorp, hospedado, nome_hotel, valor_diaria,
-                    total_pagar, aprovado_por, observacoes, fechamento
+                    total_pagar, aprovado_por, observacoes, fechamento, aferiu_temperatura_frontend
                 ])
                 
                 if resultado is not None and isinstance(resultado, dict) and 'inserted_id' in resultado:
@@ -969,15 +974,8 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     
                     print(f"🎯 VALOR FINAL de aferiu_status: '{aferiu_status}'")
                     
-                    # Atualizar campo AFERIU_TEMPERATURA (SIMPLIFICADO)
-                    print(f"🎯 Definindo AFERIU_TEMPERATURA = '{aferiu_status}' para pedido {pedido_id_real}")
-                    try:
-                        query_aferiu = "UPDATE PEDIDOS SET AFERIU_TEMPERATURA = %s WHERE ID = %s"
-                        resultado_aferiu = executar_query(query_aferiu, [aferiu_status, pedido_id_real])
-                        print(f"✅ Campo AFERIU_TEMPERATURA atualizado: {resultado_aferiu} linhas afetadas")
-                    except Exception as e:
-                        print(f"❌ ERRO ao atualizar AFERIU_TEMPERATURA: {e}")
-                        # Continuar mesmo se der erro na atualização
+                    # ✅ AFERIU_TEMPERATURA JÁ FOI INSERIDO DIRETAMENTE NA QUERY PRINCIPAL
+                    print(f"✅ AFERIU_TEMPERATURA inserido diretamente do frontend: '{aferiu_temperatura_frontend}'")
                     
                     response = {
                         "error": False,
@@ -985,10 +983,10 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                         "pedido_id": pedido_id_real,  # ID real do banco
                         "tipo_refeicao": tipo_refeicao,
                         "total_pagar": total_pagar,
-                        "aferiu_temperatura": aferiu_status,  # SEMPRE incluir este campo
+                        "aferiu_temperatura": aferiu_temperatura_frontend,  # Valor REAL inserido no banco
+                        "debug_frontend_enviou": aferiu_temperatura_frontend,  # DEBUG temporário  
                         "debug_tipo_original": tipo_refeicao,  # DEBUG temporário
-                        "debug_tipo_normalizado": tipo_normalizado,  # DEBUG temporário
-                        "debug_aferiu_final": aferiu_status  # DEBUG temporário
+                        "debug_query_incluiu": "AFERIU_TEMPERATURA adicionado na query principal"  # DEBUG temporário
                     }
                     print(f"� RESPONSE FINAL: {json.dumps(response, ensure_ascii=False, indent=2)}")  # DEBUG completo
                 else:
