@@ -7183,9 +7183,17 @@ var templateParams = {
                 const fazendaDigitada = document.getElementById('farmNameInput')?.value?.trim() || '';
                 
                 // Determinar status de aferição de temperatura baseado no tipo de refeição
-                let aferiuTemperatura = 'NAO_NECESSITA';
-                if (tipoRefeicao === 'Almoço Marmitex' || tipoRefeicao === 'Janta Marmitex') {
+                let aferiuTemperatura = 'NAO_NECESSITA'; // Padrão para CAFÉ, ALMOÇO LOCAL, JANTA LOCAL
+                
+                console.log(`🌡️ Verificando aferição para tipo: "${tipoRefeicao}"`);
+                
+                // MARMITEX precisa de aferição de temperatura
+                if (tipoRefeicao === 'ALMOÇO MARMITEX' || tipoRefeicao === 'JANTA MARMITEX' || 
+                    tipoRefeicao.includes('MARMITEX') || tipoRefeicao.includes('MARMITA')) {
                     aferiuTemperatura = 'NAO'; // Precisa aferir mas ainda não foi aferido
+                    console.log(`🌡️ MARMITEX detectado: ${tipoRefeicao} → aferiu_temperatura = "NAO"`);
+                } else {
+                    console.log(`🚫 Tipo que NÃO precisa aferição: ${tipoRefeicao} → aferiu_temperatura = "NAO_NECESSITA"`);
                 }
                 // Café, Almoço Local e Janta Local ficam como 'NAO_NECESSITA'
                 
