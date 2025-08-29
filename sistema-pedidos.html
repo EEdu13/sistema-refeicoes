@@ -3232,6 +3232,7 @@
                 img_retirada: imgRetirada,
                 img_consumo: imgConsumo,
                 observacoes: observacoesGerais,
+                aferiu_temperatura: "SIM", // IMPORTANTE: Marcar como aferido
                 timestamp: new Date().toISOString()
             };
             
@@ -7158,6 +7159,13 @@ var templateParams = {
                 // FAZENDA = USAR APENAS O QUE FOI DIGITADO, NÃO DO FORNECEDOR
                 const fazendaDigitada = document.getElementById('farmNameInput')?.value?.trim() || '';
                 
+                // Determinar status de aferição de temperatura baseado no tipo de refeição
+                let aferiuTemperatura = 'NAO_NECESSITA';
+                if (tipoRefeicao === 'Almoço Marmitex' || tipoRefeicao === 'Janta Marmitex') {
+                    aferiuTemperatura = 'NAO'; // Precisa aferir mas ainda não foi aferido
+                }
+                // Café, Almoço Local e Janta Local ficam como 'NAO_NECESSITA'
+                
                 const pedidoData = {
                     // Dados básicos (valor_pago é UNITÁRIO, não total)
                     data_retirada: dataRetirada,
@@ -7193,6 +7201,9 @@ var templateParams = {
                     nome_hotel_real: document.getElementById('hotelNameInput')?.value?.trim() || '',
                     valor_diaria_real: parseFloat(document.getElementById('dailyRateInput')?.value || 0),
                     
+                    // Status de aferição de temperatura
+                    aferiu_temperatura: aferiuTemperatura,
+                    
                     // Observações
                     observacoes: `Pedido criado via app. Equipe: ${equipe}. Colaboradores: ${colaboradoresSelecionados.length} selecionados + ${naoContratadosCountAtual} a contratar = ${totalColaboradoresFinal} total.`
                 };
@@ -7202,7 +7213,8 @@ var templateParams = {
                 console.log(`   🏪 Fornecedor: ${nomeCompletoFornecedor}`);
                 console.log(`   💰 Valor unitário: R$ ${price.toFixed(2)}`);
                 console.log(`   👥 Colaboradores: ${totalColaboradores} pessoas`);
-                console.log(`   🏢 Projeto: ${projeto} | Equipe: ${equipe}`);
+                console.log(`   �️ Aferição temperatura: ${aferiuTemperatura}`);
+                console.log(`   �🏢 Projeto: ${projeto} | Equipe: ${equipe}`);
                 console.log(`   👔 Coordenador: ${coordenador} | Supervisor: ${supervisor}`);
                 console.log(`   🔧 CORREÇÕES:`);
                 console.log(`      LIDER (equipe): ${equipe}`);
