@@ -791,7 +791,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                         if col['COLUMN_NAME'] == 'AFERIU_TEMPERATURA':
                             coluna_aferiu_existe = True
                     
-                    # Verificar se coluna AFERIU_TEMPERATURA existe
+                    # Verificar se coluna AFERIU_TEMPERATURA existe e tem tamanho adequado
                     if not coluna_aferiu_existe:
                         print("⚠️ Coluna AFERIU_TEMPERATURA não existe! Criando...")
                         try:
@@ -802,6 +802,27 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                             print(f"❌ Erro ao criar coluna AFERIU_TEMPERATURA: {e}")
                     else:
                         print("✅ Coluna AFERIU_TEMPERATURA já existe")
+                        # Verificar tamanho da coluna
+                        try:
+                            size_query = """
+                            SELECT CHARACTER_MAXIMUM_LENGTH 
+                            FROM INFORMATION_SCHEMA.COLUMNS 
+                            WHERE TABLE_NAME = 'PEDIDOS' AND COLUMN_NAME = 'AFERIU_TEMPERATURA'
+                            """
+                            size_result = executar_query(size_query, [])
+                            if size_result and len(size_result) > 0:
+                                current_size = size_result[0]['CHARACTER_MAXIMUM_LENGTH']
+                                print(f"🔍 Tamanho atual da coluna AFERIU_TEMPERATURA: {current_size}")
+                                
+                                if current_size < 20:  # Precisa de pelo menos 20 para 'NAO_NECESSITA'
+                                    print(f"⚠️ Coluna muito pequena ({current_size}), aumentando para 50...")
+                                    alter_size_query = "ALTER TABLE PEDIDOS ALTER COLUMN AFERIU_TEMPERATURA NVARCHAR(50)"
+                                    resultado_size = executar_query(alter_size_query, [])
+                                    print(f"✅ Tamanho da coluna alterado: {resultado_size}")
+                                else:
+                                    print(f"✅ Tamanho da coluna adequado: {current_size}")
+                        except Exception as e:
+                            print(f"❌ Erro ao verificar/alterar tamanho da coluna: {e}")
                 else:
                     print("⚠️ Não foi possível obter estrutura da tabela")
                 
@@ -906,18 +927,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                              responsavel_cartao, pagcorp, hospedado, nome_hotel, valor_diaria,
                              total_pagar, aprovado_por, observacoes, fechamento, aferiu_temperatura_frontend]
                 print(f"   Total parâmetros: {len(parametros)}")
-                print(f"   AFERIU_TEMPERATURA será: '{aferiu_temperatura_frontend}'")
-                
-                # DEBUG DETALHADO DE CADA PARÂMETRO
-                param_names = ["data_retirada", "projeto", "coordenador", "supervisor", "lider", "nome_lider",
-                              "fazenda", "tipo_refeicao", "cidade", "fornecedor", "valor_pago", 
-                              "colaboradores_nomes", "total_colaboradores", "a_contratar",
-                              "responsavel_cartao", "pagcorp", "hospedado", "nome_hotel", "valor_diaria",
-                              "total_pagar", "aprovado_por", "observacoes", "fechamento", "aferiu_temperatura"]
-                
-                print("🔍 DEBUG PARÂMETROS DETALHADO:")
-                for i, (name, value) in enumerate(zip(param_names, parametros)):
-                    print(f"   {i+1:2d}. {name}: {repr(value)} ({type(value).__name__})")
+                print(f"   AFERIU_TEMPERATURA será: '{aferiu_temperatura_frontend}' ({len(aferiu_temperatura_frontend)} chars)")
                 
                 resultado = executar_query(query, parametros)
                 
