@@ -33,6 +33,54 @@
     
     <!-- EmailJS Script -->
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    
+    <!-- Sistema de Controle de Versão e Cache -->
+    <script>
+        // ⚠️ INCREMENTAR SEMPRE QUE HOUVER MUDANÇAS IMPORTANTES
+        const APP_VERSION = '2.4.1'; // Última atualização: Correção FECHAMENTO fornecedores customizados
+        const VERSION_KEY = 'app_version_refeicoes';
+        
+        // Verificar se precisa forçar atualização
+        function checkForUpdates() {
+            const storedVersion = localStorage.getItem(VERSION_KEY);
+            
+            if (!storedVersion || storedVersion !== APP_VERSION) {
+                // Nova versão detectada - mostrar alerta
+                setTimeout(() => {
+                    const shouldUpdate = confirm(
+                        `🔄 NOVA ATUALIZAÇÃO DISPONÍVEL!\n\n` +
+                        `Versão atual: ${APP_VERSION}\n` +
+                        `${storedVersion ? `Versão anterior: ${storedVersion}\n` : ''}` +
+                        `\n✨ Novidades:\n` +
+                        `• Correção de fornecedores customizados\n` +
+                        `• Pedidos individuais/avulsos\n` +
+                        `• Novo ícone temático 🍱\n` +
+                        `• Melhorias de performance\n\n` +
+                        `Clique OK para atualizar e limpar o cache.`
+                    );
+                    
+                    if (shouldUpdate) {
+                        // Salvar nova versão
+                        localStorage.setItem(VERSION_KEY, APP_VERSION);
+                        
+                        // Forçar limpeza do cache e reload
+                        if ('caches' in window) {
+                            caches.keys().then(names => {
+                                names.forEach(name => caches.delete(name));
+                            });
+                        }
+                        
+                        // Reload com force refresh
+                        window.location.reload(true);
+                    }
+                }, 1000); // Aguardar 1 segundo para o app carregar
+            }
+        }
+        
+        // Executar verificação ao carregar
+        document.addEventListener('DOMContentLoaded', checkForUpdates);
+    </script>
+    
     <style>
         * {
             margin: 0;
@@ -7442,6 +7490,38 @@ var templateParams = {
                 });
             }
         }
+        
+        // 🔄 FUNÇÃO DE ATUALIZAÇÃO FORÇADA (Emergência)
+        // Pressionar Ctrl+Shift+U para forçar atualização
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.shiftKey && e.key === 'U') {
+                e.preventDefault();
+                const forceUpdate = confirm(
+                    `🔧 ATUALIZAÇÃO FORÇADA\n\n` +
+                    `Isso irá:\n` +
+                    `• Limpar TODO o cache\n` +
+                    `• Recarregar a página\n` +
+                    `• Forçar nova versão\n\n` +
+                    `Use apenas se estiver com problemas!\n\n` +
+                    `Continuar?`
+                );
+                
+                if (forceUpdate) {
+                    // Limpar TUDO
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    
+                    if ('caches' in window) {
+                        caches.keys().then(names => {
+                            names.forEach(name => caches.delete(name));
+                        });
+                    }
+                    
+                    // Recarregar com força total
+                    window.location.href = window.location.href + '?v=' + Date.now();
+                }
+            }
+        });
     </script>
 </body>
 </html>
