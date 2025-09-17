@@ -24,8 +24,9 @@
     <meta name="screen-orientation" content="portrait">
     
     <!-- PWA Icons -->
-    <link rel="apple-touch-icon" sizes="180x180" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDE4MCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+DQo8cmVjdCB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgcng9IjI0IiBmaWxsPSIjZmY2YjM1Ii8+DQo8dGV4dCB4PSI5MCIgeT0iMTEwIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSI3NSIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPvCfjbE8L3RleHQ+DQo8L3N2Zz4NCg==">
-    <link rel="icon" type="image/png" sizes="32x32" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4NCjxyZWN0IHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgcng9IjYiIGZpbGw9IiNmZjZiMzUiLz4NCjx0ZXh0IHg9IjE2IiB5PSIyMiIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7wn42xPC90ZXh0Pg0KPC9zdmc+DQo=">
+    <link rel="apple-touch-icon" sizes="180x180" href="iconenovo.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="iconenovo.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="iconenovo.png">
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
@@ -37,7 +38,7 @@
     <!-- Sistema de Controle de Versão e Cache -->
     <script>
         // ⚠️ INCREMENTAR SEMPRE QUE HOUVER MUDANÇAS IMPORTANTES
-        const APP_VERSION = '2.4.1'; // Última atualização: Correção FECHAMENTO fornecedores customizados
+        const APP_VERSION = '2.4.2'; // Última atualização: Novo ícone personalizado PWA
         const VERSION_KEY = 'app_version_refeicoes';
         
         // Verificar se precisa forçar atualização
@@ -52,9 +53,9 @@
                         `Versão atual: ${APP_VERSION}\n` +
                         `${storedVersion ? `Versão anterior: ${storedVersion}\n` : ''}` +
                         `\n✨ Novidades:\n` +
+                        `• Novo ícone personalizado 🎨\n` +
                         `• Correção de fornecedores customizados\n` +
                         `• Pedidos individuais/avulsos\n` +
-                        `• Novo ícone temático 🍱\n` +
                         `• Melhorias de performance\n\n` +
                         `Clique OK para atualizar e limpar o cache.`
                     );
