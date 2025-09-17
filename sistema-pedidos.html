@@ -7133,7 +7133,31 @@ var templateParams = {
                 const select = document.querySelector(`select[data-meal="${mealType}"]`);
                 const isCustomSupplier = select && select.value === '__custom__';
                 
-                if (isCustomSupplier) {
+                // DEBUG detalhado para detectar o problema
+                console.log(`🔍 DEBUG FECHAMENTO para "${supplier}" (mealType: ${mealType}):`);
+                console.log(`   select encontrado:`, !!select);
+                console.log(`   select.value:`, select ? `"${select.value}"` : 'N/A');
+                console.log(`   isCustomSupplier:`, isCustomSupplier);
+                
+                // VERIFICAÇÃO ADICIONAL: Se não tem fornecedores cadastrados para este projeto
+                // E o fornecedor não está na lista, assumir que é customizado
+                let isDefinitelyCustom = false;
+                if (!isCustomSupplier && window.dadosFornecedores) {
+                    const fornecedorExiste = window.dadosFornecedores.some(f => 
+                        f.FORNECEDOR && (
+                            f.FORNECEDOR.trim() === supplier ||
+                            f.FORNECEDOR.toLowerCase().replace(/\s+/g, '_') === supplier ||
+                            f.FORNECEDOR.toLowerCase().includes(supplier.toLowerCase())
+                        )
+                    );
+                    
+                    if (!fornecedorExiste) {
+                        isDefinitelyCustom = true;
+                        console.log(`⚠️ Fornecedor "${supplier}" não encontrado na lista - tratando como customizado`);
+                    }
+                }
+                
+                if (isCustomSupplier || isDefinitelyCustom) {
                     // Para fornecedores customizados (digitados), deixar FECHAMENTO em branco
                     console.log(`✏️ Fornecedor customizado detectado: "${supplier}" - FECHAMENTO será deixado em branco`);
                     fechamentoFornecedor = ''; // Deixar em branco
@@ -7169,8 +7193,20 @@ var templateParams = {
                     } else {
                         console.log(`❌ Fornecedor da lista não encontrado na tabela`);
                         console.log(`📊 Fornecedores disponíveis:`, window.dadosFornecedores.map(f => ({nome: f.FORNECEDOR, fechamento: f.FECHAMENTO})));
+                        // PROTEÇÃO FINAL: Se fornecedor não foi encontrado na lista, deixar fechamento em branco
+                        fechamentoFornecedor = '';
+                        fazendaFornecedor = '';
+                        console.log(`🚫 PROTEÇÃO: Fornecedor "${supplier}" não encontrado - FECHAMENTO forçado para BRANCO`);
                     }
+                } else {
+                    // Caso não tenha fornecedores carregados, deixar em branco também
+                    console.log(`⚠️ Nenhum fornecedor carregado - FECHAMENTO em branco para "${supplier}"`);
+                    fechamentoFornecedor = '';
+                    fazendaFornecedor = '';
                 }
+                
+                // LOG FINAL de confirmação
+                console.log(`🎯 FECHAMENTO FINAL para "${supplier}": "${fechamentoFornecedor}"`);
                 
                 // Coletar apenas os nomes dos colaboradores selecionados (NÃO incluir A CONTRATAR aqui)
                 const colaboradoresSelecionados = [];
