@@ -267,6 +267,9 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
         elif path.endswith('.css'):
             self.serve_static_file(path[1:], 'text/css')
             return
+        elif path.endswith('.png'):
+            self.serve_static_file(path[1:], 'image/png')
+            return
         
         # Headers CORS para APIs
         self.send_response(200)
