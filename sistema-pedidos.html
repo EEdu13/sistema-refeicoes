@@ -39,7 +39,7 @@
     <!-- Sistema de Controle de Versão e Cache -->
     <script>
         // ⚠️ INCREMENTAR SEMPRE QUE HOUVER MUDANÇAS IMPORTANTES
-        const APP_VERSION = '2.4.4'; // Última atualização: Ícone PWA corrigido (SVG otimizado)
+        const APP_VERSION = '2.4.6'; // Última atualização: Ícone PWA corrigido (SVG otimizado)
         const VERSION_KEY = 'app_version_refeicoes';
         
         // Verificar se precisa forçar atualização
@@ -47,40 +47,45 @@
             const storedVersion = localStorage.getItem(VERSION_KEY);
             
             if (!storedVersion || storedVersion !== APP_VERSION) {
-                // Nova versão detectada - mostrar alerta
+                console.log(`🔄 Nova versão detectada: ${APP_VERSION} (anterior: ${storedVersion || 'N/A'})`);
+                
+                // FORÇAR limpeza do cache IMEDIATAMENTE
+                if ('caches' in window) {
+                    caches.keys().then(names => {
+                        console.log(`🗑️ Limpando ${names.length} caches...`);
+                        names.forEach(name => caches.delete(name));
+                    });
+                }
+                
+                // Salvar nova versão
+                localStorage.setItem(VERSION_KEY, APP_VERSION);
+                
+                // Mostrar alerta de atualização
                 setTimeout(() => {
-                    const shouldUpdate = confirm(
-                        `🔄 NOVA ATUALIZAÇÃO DISPONÍVEL!\n\n` +
-                        `Versão atual: ${APP_VERSION}\n` +
-                        `${storedVersion ? `Versão anterior: ${storedVersion}\n` : ''}` +
-                        `\n✨ Novidades:\n` +
-                        `• Ícone PWA corrigido e otimizado 🎨\n` +
-                        `• Correção de fornecedores customizados\n` +
-                        `• Pedidos individuais/avulsos\n` +
-                        `• Melhorias de performance\n\n` +
-                        `Clique OK para atualizar e limpar o cache.`
+                    alert(
+                        `🔄 SISTEMA ATUALIZADO!\n\n` +
+                        `Versão: ${APP_VERSION}\n\n` +
+                        `✨ Novidades:\n` +
+                        `• Fornecedores customizados corrigidos\n` +
+                        `• Data padrão agora é AMANHÃ\n` +
+                        `• Ícone PWA otimizado\n` +
+                        `• Cache limpo automaticamente\n\n` +
+                        `O sistema está pronto para uso! 🚀`
                     );
-                    
-                    if (shouldUpdate) {
-                        // Salvar nova versão
-                        localStorage.setItem(VERSION_KEY, APP_VERSION);
-                        
-                        // Forçar limpeza do cache e reload
-                        if ('caches' in window) {
-                            caches.keys().then(names => {
-                                names.forEach(name => caches.delete(name));
-                            });
-                        }
-                        
-                        // Reload com force refresh
-                        window.location.reload(true);
-                    }
-                }, 1000); // Aguardar 1 segundo para o app carregar
+                }, 1000);
             }
         }
         
         // Executar verificação ao carregar
-        document.addEventListener('DOMContentLoaded', checkForUpdates);
+        document.addEventListener('DOMContentLoaded', () => {
+            checkForUpdates();
+            
+            // Atualizar versão no display
+            const versionDisplay = document.getElementById('appVersionDisplay');
+            if (versionDisplay) {
+                versionDisplay.textContent = APP_VERSION;
+            }
+        });
     </script>
     
     <style>
@@ -1843,8 +1848,11 @@
                 <button class="btn btn-outline-secondary btn-sm" onclick="limparCacheCompleto()" style="font-size: 12px; padding: 8px 16px;">
                     🧹 Limpar Cache
                 </button>
-                <p style="font-size: 11px; color: #666; margin-top: 5px;">
+                <p style="font-size: 11px; color: #666; margin-top: 5px; margin-bottom: 3px;">
                     Use se houver problemas de sincronização
+                </p>
+                <p style="font-size: 10px; color: #999; margin: 0;">
+                    v<span id="appVersionDisplay">2.4.6</span>
                 </p>
             </div>
         </div>
@@ -4205,9 +4213,11 @@
             // Reset do formulário
             resetOrder();
             
-            // Preencher data de hoje por padrão
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('withdrawalDateInput').value = today;
+            // Preencher data de AMANHÃ por padrão (sempre um dia depois)
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowStr = tomorrow.toISOString().split('T')[0];
+            document.getElementById('withdrawalDateInput').value = tomorrowStr;
             
             // Detectar localização automaticamente se o campo estiver vazio
             const cityInput = document.getElementById('serviceCityInput');
@@ -7189,51 +7199,32 @@ var templateParams = {
                 console.log(`   select.value:`, select ? `"${select.value}"` : 'N/A');
                 console.log(`   isCustomSupplier:`, isCustomSupplier);
                 
-                // VERIFICAÇÃO ADICIONAL: Se não tem fornecedores cadastrados para este projeto
-                // E o fornecedor não está na lista, assumir que é customizado
-                let isDefinitelyCustom = false;
-                if (!isCustomSupplier && window.dadosFornecedores) {
-                    const fornecedorExiste = window.dadosFornecedores.some(f => 
-                        f.FORNECEDOR && (
-                            f.FORNECEDOR.trim() === supplier ||
-                            f.FORNECEDOR.toLowerCase().replace(/\s+/g, '_') === supplier ||
-                            f.FORNECEDOR.toLowerCase().includes(supplier.toLowerCase())
-                        )
+                // ✅ SOLUÇÃO: Verificar se o fornecedor está EXATAMENTE na lista
+                // Se clicar no fornecedor da lista = FECHAMENTO "SIM"
+                // Se digitar manualmente = FECHAMENTO em branco
+                let fornecedorNaLista = false;
+                if (window.dadosFornecedores && window.dadosFornecedores.length > 0) {
+                    // Verificar se o fornecedor está EXATAMENTE na lista cadastrada
+                    fornecedorNaLista = window.dadosFornecedores.some(f => 
+                        f.FORNECEDOR && f.FORNECEDOR.trim() === supplier
                     );
-                    
-                    if (!fornecedorExiste) {
-                        isDefinitelyCustom = true;
-                        console.log(`⚠️ Fornecedor "${supplier}" não encontrado na lista - tratando como customizado`);
-                    }
                 }
                 
-                if (isCustomSupplier || isDefinitelyCustom) {
+                // Se for customizado (__custom__) OU não estiver na lista = deixar em branco
+                if (isCustomSupplier || !fornecedorNaLista) {
                     // Para fornecedores customizados (digitados), deixar FECHAMENTO em branco
-                    console.log(`✏️ Fornecedor customizado detectado: "${supplier}" - FECHAMENTO será deixado em branco`);
+                    console.log(`✏️ Fornecedor customizado ou não encontrado: "${supplier}" - FECHAMENTO em branco`);
                     fechamentoFornecedor = ''; // Deixar em branco
                     fazendaFornecedor = ''; // Também deixar fazenda em branco
-                } else if (window.dadosFornecedores && window.dadosFornecedores.length > 0) {
+                } else if (fornecedorNaLista) {
                     // Buscar fornecedor correspondente pelo nome completo (apenas para fornecedores da lista)
-                    const nomeCompletoFornecedor = document.querySelector(`button[data-supplier="${supplier}"]`)?.textContent?.trim() || '';
-                    console.log(`🔍 Buscando fornecedor da lista: "${nomeCompletoFornecedor}" (supplier: ${supplier})`);
+                    console.log(`🔍 Buscando fornecedor EXATO da lista: "${supplier}"`);
                     console.log(`📊 Total fornecedores disponíveis: ${window.dadosFornecedores.length}`);
                     
-                    // Buscar por várias estratégias
-                    let fornecedorData = window.dadosFornecedores.find(f => 
-                        f.FORNECEDOR && f.FORNECEDOR.trim() === nomeCompletoFornecedor
+                    // Buscar EXATAMENTE pelo nome
+                    const fornecedorData = window.dadosFornecedores.find(f => 
+                        f.FORNECEDOR && f.FORNECEDOR.trim() === supplier
                     );
-                    
-                    if (!fornecedorData) {
-                        fornecedorData = window.dadosFornecedores.find(f => 
-                            f.FORNECEDOR && f.FORNECEDOR.toLowerCase().replace(/\s+/g, '_') === supplier
-                        );
-                    }
-                    
-                    if (!fornecedorData) {
-                        fornecedorData = window.dadosFornecedores.find(f => 
-                            f.FORNECEDOR && f.FORNECEDOR.toLowerCase().includes(nomeCompletoFornecedor.toLowerCase())
-                        );
-                    }
                     
                     if (fornecedorData) {
                         fazendaFornecedor = fornecedorData.FAZENDA || fornecedorData.LOCAL || '';
@@ -7241,12 +7232,9 @@ var templateParams = {
                         console.log(`✅ Fornecedor da lista encontrado:`, fornecedorData);
                         console.log(`✅ FAZENDA="${fazendaFornecedor}", FECHAMENTO="${fechamentoFornecedor}"`);
                     } else {
-                        console.log(`❌ Fornecedor da lista não encontrado na tabela`);
-                        console.log(`📊 Fornecedores disponíveis:`, window.dadosFornecedores.map(f => ({nome: f.FORNECEDOR, fechamento: f.FECHAMENTO})));
-                        // PROTEÇÃO FINAL: Se fornecedor não foi encontrado na lista, deixar fechamento em branco
+                        console.log(`❌ Erro: Fornecedor não encontrado mesmo estando na lista`);
                         fechamentoFornecedor = '';
                         fazendaFornecedor = '';
-                        console.log(`🚫 PROTEÇÃO: Fornecedor "${supplier}" não encontrado - FECHAMENTO forçado para BRANCO`);
                     }
                 } else {
                     // Caso não tenha fornecedores carregados, deixar em branco também
