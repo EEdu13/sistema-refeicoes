@@ -35,11 +35,14 @@
     
     <!-- EmailJS Script -->
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+
+    <!-- 🎯 MÓDULOS DO SISTEMA -->
+    <script src="js/app-modules.js"></script>
     
     <!-- Sistema de Controle de Versão e Cache -->
     <script>
         // ⚠️ INCREMENTAR SEMPRE QUE HOUVER MUDANÇAS IMPORTANTES
-        const APP_VERSION = '2.4.6'; // Última atualização: Ícone PWA corrigido (SVG otimizado)
+        const APP_VERSION = '2.5.0'; // Refatoração completa: SupplierManager, CacheManager, correção FECHAMENTO
         const VERSION_KEY = 'app_version_refeicoes';
         
         // Verificar se precisa forçar atualização
@@ -2426,24 +2429,62 @@
     </div>
 
     <script>
-        // Variáveis globais
-        var selectedMeals = [];
-        var selectedEmployees = [];
-        var pendingTemperatures = [];
-        var isOnline = navigator.onLine;
-        var currentTempData = {};
-        
-        // ========== VARIÁVEIS GLOBAIS PARA IMAGENS ==========
-        var globalImageRetirada = null;  // Imagem de retirada em base64
-        var globalImageConsumo = null;   // Imagem de consumo em base64
-        var imageTimestamps = {          // Timestamps para debug
-            retirada: null,
-            consumo: null
-        };
-        
-        // ========== VARIÁVEIS GLOBAIS PARA FOTOS DE PROBLEMA ==========
-        var imagemFoto1Capturada = null;  // Foto 1 do problema em base64
-        var imagemFoto2Capturada = null;  // Foto 2 do problema em base64
+        // 🎯 COMPATIBILIDADE COM CÓDIGO LEGADO (getters/setters para AppState)
+        Object.defineProperty(window, 'selectedMeals', {
+            get() { return AppState.order.selectedMeals; },
+            set(value) { AppState.order.selectedMeals = value; }
+        });
+
+        Object.defineProperty(window, 'selectedEmployees', {
+            get() { return AppState.order.selectedEmployees; },
+            set(value) { AppState.order.selectedEmployees = value; }
+        });
+
+        Object.defineProperty(window, 'pendingTemperatures', {
+            get() { return AppState.temperature.pending; },
+            set(value) { AppState.temperature.pending = value; }
+        });
+
+        Object.defineProperty(window, 'isOnline', {
+            get() { return AppState.network.isOnline; },
+            set(value) { AppState.network.isOnline = value; }
+        });
+
+        Object.defineProperty(window, 'currentTempData', {
+            get() { return AppState.temperature.current; },
+            set(value) { AppState.temperature.current = value; }
+        });
+
+        Object.defineProperty(window, 'globalImageRetirada', {
+            get() { return AppState.temperature.images.retirada; },
+            set(value) { AppState.temperature.images.retirada = value; }
+        });
+
+        Object.defineProperty(window, 'globalImageConsumo', {
+            get() { return AppState.temperature.images.consumo; },
+            set(value) { AppState.temperature.images.consumo = value; }
+        });
+
+        Object.defineProperty(window, 'imageTimestamps', {
+            get() { return AppState.temperature.images.timestamps; }
+        });
+
+        Object.defineProperty(window, 'imagemFoto1Capturada', {
+            get() { return AppState.problem.foto1; },
+            set(value) { AppState.problem.foto1 = value; }
+        });
+
+        Object.defineProperty(window, 'imagemFoto2Capturada', {
+            get() { return AppState.problem.foto2; },
+            set(value) { AppState.problem.foto2 = value; }
+        });
+
+        // Variáveis que continuam como antes (por enquanto)
+        var otherParticipants = [];
+        window.otherParticipants = [];
+        var naoContratadosCount = 0;
+        window.naoContratadosCount = 0;
+        var isOnlineGlobal = navigator.onLine;
         
         // Função para detectar URL base do servidor
         function getServerBaseUrl() {
@@ -2650,50 +2691,14 @@
             updateSummary();
         }
 
+        // 🎯 USAR SUPPLIERMANAGER (mantendo compatibilidade)
         function getSelectedSupplier(mealType) {
-            const select = document.querySelector(`select[data-meal="${mealType}"]`);
-            const input = document.getElementById(`supplier-input-${mealType}`);
-            
-            if (!select) return null;
-            
-            if (select.value === '__custom__') {
-                // Se é fornecedor personalizado, retorna o valor do input
-                return input.value.trim() || null;
-            } else if (select.value && select.value !== '') {
-                // Se tem fornecedor selecionado no dropdown
-                const selectedOption = select.options[select.selectedIndex];
-                return selectedOption ? selectedOption.text : null;
-            } else {
-                // Se não tem nada selecionado no dropdown, verificar se tem input personalizado preenchido
-                return input && input.value.trim() ? input.value.trim() : null;
-            }
+            return SupplierManager.getName(mealType);
         }
 
+        // 🎯 USAR SUPPLIERMANAGER (mantendo compatibilidade)
         function getCustomPrice(mealType) {
-            const priceInput = document.getElementById(`price-${mealType}`);
-            const select = document.querySelector(`select[data-meal="${mealType}"]`);
-            
-            // Se tem um valor no campo de preço, usa esse valor
-            if (priceInput && priceInput.value && priceInput.value.trim() !== '') {
-                return parseFloat(priceInput.value) || 0;
-            }
-            
-            // Se tem fornecedor selecionado com preço predefinido, usa o preço da opção
-            if (select && select.value && select.value !== '' && select.value !== '__custom__') {
-                const selectedOption = select.options[select.selectedIndex];
-                if (selectedOption && selectedOption.dataset.preco) {
-                    return parseFloat(selectedOption.dataset.preco) || 0;
-                }
-            }
-            
-            // Fallback para preços padrão (se ainda existirem)
-            const selectedSupplier = getSelectedSupplier(mealType);
-            if (selectedSupplier && selectedSupplier !== 'personalizado') {
-                return mealPrices[mealType] || 0;
-            }
-            
-            // Se for fornecedor personalizado sem valor digitado, retorna 0
-            return 0;
+            return SupplierManager.getPrice(mealType);
         }
 
         async function doSubmitOrder() {
@@ -3995,6 +4000,7 @@
 
         document.addEventListener('DOMContentLoaded', async function() {
             console.log('🚀 Inicializando sistema...');
+            DOM.init(); // 🎯 Inicializar cache de elementos DOM
             
             // ⭐ PRIMEIRA PRIORIDADE: Verificar login salvo ANTES de qualquer coisa
             console.log('🔍 Verificando login salvo no DOMContentLoaded...');
@@ -6117,60 +6123,6 @@ var templateParams = {
         });
 
         // Função de login por equipe
-        async function loginEquipe() {
-            var equipe = document.getElementById('equipeInput').value.trim().toUpperCase();
-            if (!equipe) {
-                alert('Digite sua equipe!');
-                return;
-            }
-            
-            // Mostrar loading
-            var botaoLogin = document.querySelector('#loginScreen button');
-            var textoOriginal = botaoLogin.textContent;
-            botaoLogin.textContent = 'Carregando...';
-            botaoLogin.disabled = true;
-            
-            try {
-                // Extrai projeto (números)
-                var projeto = equipe.replace(/[^0-9]/g, '');
-                
-                // 🧹 LIMPAR DADOS ANTERIORES COMPLETAMENTE
-                console.log('🧹 Limpando todos os dados anteriores...');
-                limparDadosAnteriores();
-                
-                // Busca dados das APIs do Azure SQL
-                var sucesso = await buscarDadosPorProjetoEquipe(projeto, equipe);
-                
-                // ✅ SEMPRE PERMITIR LOGIN - INDEPENDENTE DO RESULTADO
-                console.log('✅ Forçando login para qualquer equipe');
-                
-                // Salvar login para persistir após refresh
-                salvarLogin(projeto, equipe);
-                
-                // Login bem-sucedido
-                document.getElementById('loginScreen').classList.add('hidden');
-                document.getElementById('mainScreen').classList.remove('hidden');
-                loadPendingTemperatures();
-                updateSyncStatus();
-                
-            } catch (error) {
-                console.error('Erro no login:', error);
-                
-                // ✅ MESMO COM ERRO - PERMITIR LOGIN
-                console.log('⚠️ Erro na API, mas permitindo login...');
-                var projeto = equipe.replace(/[^0-9]/g, '');
-                salvarLogin(projeto, equipe);
-                document.getElementById('loginScreen').classList.add('hidden');
-                document.getElementById('mainScreen').classList.remove('hidden');
-                loadPendingTemperatures();
-                updateSyncStatus();
-            } finally {
-                // Restaurar botão
-                botaoLogin.textContent = textoOriginal;
-                botaoLogin.disabled = false;
-            }
-        }
-
         // Função para limpar cache completo (PWA)
         function limparCacheCompleto() {
             const opcoes = [
@@ -6663,15 +6615,25 @@ var templateParams = {
                     throw new Error('Erro nos dados retornados pelas APIs');
                 }
                 
-                // Armazenar dados globalmente (INCLUINDO ORGANOGRAMA)
-                window.dadosFornecedores = fornecedoresData.fornecedores || [];
-                window.dadosColaboradores = colaboradoresData.colaboradores || [];
-                window.dadosOrganograma = organogramaData.organograma || [];
-                
-                console.log(`✅ Dados do login carregados:`, {
-                    fornecedores: window.dadosFornecedores.length,
-                    colaboradores: window.dadosColaboradores.length,
-                    organograma: window.dadosOrganograma.length
+                // 🎯 USAR CACHEMANAGER INTELIGENTE
+                const fornecedores = fornecedoresData.fornecedores || [];
+                const colaboradores = colaboradoresData.colaboradores || [];
+                const organograma = organogramaData.organograma || [];
+
+                // Salvar no cache inteligente
+                CacheManager.set('fornecedores', fornecedores);
+                CacheManager.set('colaboradores', colaboradores);
+                CacheManager.set('organograma', organograma);
+
+                // Manter compatibilidade com código legado
+                window.dadosFornecedores = fornecedores;
+                window.dadosColaboradores = colaboradores;
+                window.dadosOrganograma = organograma;
+
+                console.log(`✅ Dados salvos no cache:`, {
+                    fornecedores: fornecedores.length,
+                    colaboradores: colaboradores.length,
+                    organograma: organograma.length
                 });
                 
                 // Debug do organograma carregado
@@ -6723,8 +6685,8 @@ var templateParams = {
                     equipe: equipe,
                     timestamp: Date.now()
                 };
-                localStorage.setItem('dadosAPI_cache', JSON.stringify(cacheData));
-                console.log('💾 Cache de dados completo salvo (fornecedores + colaboradores + organograma + PAGCORP)');
+                // 🎯 Cache agora gerenciado pelo CacheManager (já salvo acima)
+                console.log('💾 Cache de dados completo gerenciado pelo CacheManager');
                 
                 // Popular colaboradores na interface
                 popularColaboradores(window.dadosColaboradores);
@@ -7034,8 +6996,8 @@ var templateParams = {
 
         // Função para carregar fornecedores filtrados por tipo de refeição
         function carregarFornecedoresPorTipo(mealType) {
-            // Se não temos dados de fornecedores filtrados, usar dados mockados
-            const fornecedores = window.dadosFornecedores || [];
+            // 🎯 Buscar fornecedores do cache gerenciado
+            const fornecedores = CacheManager.get('fornecedores') || [];
             
             // Mapear tipos de refeição do sistema para os tipos da tabela (TIPO_FORN)
             const mealTypeMapping = {
@@ -7185,66 +7147,19 @@ var templateParams = {
                     console.log(`⚠️ Nenhum dado de organograma disponível`);
                 }
                 
-                // Buscar FAZENDA da tabela de fornecedores
-                let fazendaFornecedor = '';
-                let fechamentoFornecedor = '';
-                
-                // Verificar se é fornecedor customizado (digitado manualmente)
-                const select = document.querySelector(`select[data-meal="${mealType}"]`);
-                const isCustomSupplier = select && select.value === '__custom__';
-                
-                // DEBUG detalhado para detectar o problema
-                console.log(`🔍 DEBUG FECHAMENTO para "${supplier}" (mealType: ${mealType}):`);
-                console.log(`   select encontrado:`, !!select);
-                console.log(`   select.value:`, select ? `"${select.value}"` : 'N/A');
-                console.log(`   isCustomSupplier:`, isCustomSupplier);
-                
-                // ✅ SOLUÇÃO: Verificar se o fornecedor está EXATAMENTE na lista
-                // Se clicar no fornecedor da lista = FECHAMENTO "SIM"
-                // Se digitar manualmente = FECHAMENTO em branco
-                let fornecedorNaLista = false;
-                if (window.dadosFornecedores && window.dadosFornecedores.length > 0) {
-                    // Verificar se o fornecedor está EXATAMENTE na lista cadastrada
-                    fornecedorNaLista = window.dadosFornecedores.some(f => 
-                        f.FORNECEDOR && f.FORNECEDOR.trim() === supplier
-                    );
-                }
-                
-                // Se for customizado (__custom__) OU não estiver na lista = deixar em branco
-                if (isCustomSupplier || !fornecedorNaLista) {
-                    // Para fornecedores customizados (digitados), deixar FECHAMENTO em branco
-                    console.log(`✏️ Fornecedor customizado ou não encontrado: "${supplier}" - FECHAMENTO em branco`);
-                    fechamentoFornecedor = ''; // Deixar em branco
-                    fazendaFornecedor = ''; // Também deixar fazenda em branco
-                } else if (fornecedorNaLista) {
-                    // Buscar fornecedor correspondente pelo nome completo (apenas para fornecedores da lista)
-                    console.log(`🔍 Buscando fornecedor EXATO da lista: "${supplier}"`);
-                    console.log(`📊 Total fornecedores disponíveis: ${window.dadosFornecedores.length}`);
-                    
-                    // Buscar EXATAMENTE pelo nome
-                    const fornecedorData = window.dadosFornecedores.find(f => 
-                        f.FORNECEDOR && f.FORNECEDOR.trim() === supplier
-                    );
-                    
-                    if (fornecedorData) {
-                        fazendaFornecedor = fornecedorData.FAZENDA || fornecedorData.LOCAL || '';
-                        fechamentoFornecedor = fornecedorData.FECHAMENTO || '';
-                        console.log(`✅ Fornecedor da lista encontrado:`, fornecedorData);
-                        console.log(`✅ FAZENDA="${fazendaFornecedor}", FECHAMENTO="${fechamentoFornecedor}"`);
-                    } else {
-                        console.log(`❌ Erro: Fornecedor não encontrado mesmo estando na lista`);
-                        fechamentoFornecedor = '';
-                        fazendaFornecedor = '';
-                    }
-                } else {
-                    // Caso não tenha fornecedores carregados, deixar em branco também
-                    console.log(`⚠️ Nenhum fornecedor carregado - FECHAMENTO em branco para "${supplier}"`);
-                    fechamentoFornecedor = '';
-                    fazendaFornecedor = '';
-                }
-                
-                // LOG FINAL de confirmação
-                console.log(`🎯 FECHAMENTO FINAL para "${supplier}": "${fechamentoFornecedor}"`);
+                // 🎯 USAR SUPPLIERMANAGER INTELIGENTE PARA FECHAMENTO
+                const supplierInfo = SupplierManager.getInfo(mealType);
+                // supplier já foi declarado acima, apenas reutilizar
+                let fazendaFornecedor = supplierInfo?.cached?.FAZENDA || supplierInfo?.cached?.LOCAL || '';
+                let fechamentoFornecedor = SupplierManager.getFechamento(mealType);
+
+                console.log(`🎯 FORNECEDOR INFO:`, {
+                    nome: supplier,
+                    customizado: supplierInfo?.isCustom,
+                    noCache: supplierInfo?.inCache,
+                    fazenda: fazendaFornecedor,
+                    fechamento: fechamentoFornecedor
+                });
                 
                 // Coletar apenas os nomes dos colaboradores selecionados (NÃO incluir A CONTRATAR aqui)
                 const colaboradoresSelecionados = [];
