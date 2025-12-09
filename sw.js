@@ -4,9 +4,10 @@ console.log('🚀 Service Worker carregado');
 // 🎯 CACHE PARA PERSISTÊNCIA DE LOGIN iOS PWA
 let loginDataCache = null;
 
-const CACHE_NAME = 'refeicoes-pwa-v1';
+const CACHE_NAME = 'refeicoes-pwa-v3'; // 🔥 v3.0.0 - Refatoração completa
 const urlsToCache = [
     '/sistema-pedidos.html',
+    '/js/app-modules.js', // 🎯 NOVO ARQUIVO
     '/api/teste-conexao',
     '/manifest.json'
 ];

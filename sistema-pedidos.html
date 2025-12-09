@@ -42,7 +42,7 @@
     <!-- Sistema de Controle de Versão e Cache -->
     <script>
         // ⚠️ INCREMENTAR SEMPRE QUE HOUVER MUDANÇAS IMPORTANTES
-        const APP_VERSION = '2.5.0'; // Refatoração completa: SupplierManager, CacheManager, correção FECHAMENTO
+        const APP_VERSION = '3.0.0'; // 🔥 REFATORAÇÃO COMPLETA: SupplierManager, CacheManager, FECHAMENTO corrigido
         const VERSION_KEY = 'app_version_refeicoes';
         
         // Verificar se precisa forçar atualização
@@ -52,31 +52,120 @@
             if (!storedVersion || storedVersion !== APP_VERSION) {
                 console.log(`🔄 Nova versão detectada: ${APP_VERSION} (anterior: ${storedVersion || 'N/A'})`);
                 
-                // FORÇAR limpeza do cache IMEDIATAMENTE
+                // 🔥 LIMPEZA AGRESSIVA PARA v3.0.0
+                console.log('🧹 Limpando TUDO para v3.0.0...');
+                
+                // 1. Limpar TODOS os caches do Service Worker
                 if ('caches' in window) {
                     caches.keys().then(names => {
-                        console.log(`🗑️ Limpando ${names.length} caches...`);
-                        names.forEach(name => caches.delete(name));
+                        console.log(`🗑️ Limpando ${names.length} caches do Service Worker...`);
+                        names.forEach(name => {
+                            caches.delete(name);
+                            console.log(`   ✅ Cache deletado: ${name}`);
+                        });
+                    });
+                }
+                
+                // 2. Limpar localStorage (exceto versão)
+                const keysToPreserve = [VERSION_KEY];
+                Object.keys(localStorage).forEach(key => {
+                    if (!keysToPreserve.includes(key)) {
+                        localStorage.removeItem(key);
+                    }
+                });
+                console.log('🗑️ localStorage limpo');
+                
+                // 3. Limpar sessionStorage completamente
+                sessionStorage.clear();
+                console.log('🗑️ sessionStorage limpo');
+                
+                // 4. Limpar cookies do sistema
+                document.cookie.split(";").forEach(function(c) { 
+                    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+                });
+                console.log('🗑️ Cookies limpos');
+                
+                // 5. Desregistrar Service Worker antigo
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then(registrations => {
+                        registrations.forEach(registration => {
+                            registration.unregister();
+                            console.log('🗑️ Service Worker desregistrado');
+                        });
                     });
                 }
                 
                 // Salvar nova versão
                 localStorage.setItem(VERSION_KEY, APP_VERSION);
                 
-                // Mostrar alerta de atualização
+                // Mostrar alerta de atualização (com delay para processar limpeza)
                 setTimeout(() => {
                     alert(
-                        `🔄 SISTEMA ATUALIZADO!\n\n` +
-                        `Versão: ${APP_VERSION}\n\n` +
-                        `✨ Novidades:\n` +
-                        `• Fornecedores customizados corrigidos\n` +
-                        `• Data padrão agora é AMANHÃ\n` +
-                        `• Ícone PWA otimizado\n` +
-                        `• Cache limpo automaticamente\n\n` +
-                        `O sistema está pronto para uso! 🚀`
+                        `🔥 ATUALIZAÇÃO IMPORTANTE - v${APP_VERSION}\n\n` +
+                        `⚠️ MUDANÇAS CRÍTICAS:\n` +
+                        `• Sistema completamente refatorado\n` +
+                        `• Correção do campo FECHAMENTO\n` +
+                        `• Cache inteligente implementado\n` +
+                        `• Performance melhorada\n\n` +
+                        `✅ Cache limpo automaticamente\n` +
+                        `✅ Tudo pronto para uso! 🚀\n\n` +
+                        `📱 Se tiver problemas, feche e reabra o app.`
                     );
-                }, 1000);
+                    
+                    // 6. Recarregar página com força total após confirmar
+                    setTimeout(() => {
+                        window.location.href = window.location.href.split('?')[0] + '?v=' + Date.now();
+                    }, 1000);
+                }, 1500);
             }
+        }
+        
+        // 🔥 FUNÇÃO DE EMERGÊNCIA - Forçar atualização total
+        function forcarAtualizacaoTotal() {
+            const confirmar = confirm(
+                '🔥 FORÇAR ATUALIZAÇÃO COMPLETA\n\n' +
+                'Isso vai:\n' +
+                '• Limpar TODO o cache\n' +
+                '• Desinstalar Service Worker\n' +
+                '• Recarregar com versão nova\n' +
+                '• VOCÊ VAI PERDER O LOGIN SALVO\n\n' +
+                '⚠️ Use apenas se estiver com problemas!\n\n' +
+                'Continuar?'
+            );
+            
+            if (!confirmar) return;
+            
+            console.log('🔥 FORÇANDO ATUALIZAÇÃO TOTAL...');
+            
+            // 1. Limpar storage completo
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // 2. Limpar cookies
+            document.cookie.split(";").forEach(c => { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+            });
+            
+            // 3. Limpar caches do SW
+            if ('caches' in window) {
+                caches.keys().then(names => {
+                    names.forEach(name => caches.delete(name));
+                });
+            }
+            
+            // 4. Desregistrar SW
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(registrations => {
+                    registrations.forEach(reg => reg.unregister());
+                });
+            }
+            
+            alert('✅ Limpeza concluída!\n\nO app vai recarregar agora.');
+            
+            // 5. Recarregar com força máxima
+            setTimeout(() => {
+                window.location.href = window.location.href.split('?')[0] + '?force=' + Date.now();
+            }, 500);
         }
         
         // Executar verificação ao carregar
@@ -1855,8 +1944,14 @@
                     Use se houver problemas de sincronização
                 </p>
                 <p style="font-size: 10px; color: #999; margin: 0;">
-                    v<span id="appVersionDisplay">2.4.6</span>
+                    v<span id="appVersionDisplay">3.0.0</span> <!-- 🔥 ATUALIZAR AQUI TAMBÉM -->
                 </p>
+                
+                <!-- 🆕 BOTÃO DE EMERGÊNCIA -->
+                <button class="btn btn-outline-secondary btn-sm" onclick="forcarAtualizacaoTotal()" 
+                        style="font-size: 11px; padding: 6px 12px; margin-top: 8px; background: #dc2626; color: white; border-color: #dc2626;">
+                    🔥 Forçar Atualização v3.0
+                </button>
             </div>
         </div>
 
