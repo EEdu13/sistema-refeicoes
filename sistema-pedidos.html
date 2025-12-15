@@ -42,82 +42,120 @@
     <!-- Sistema de Controle de Versão e Cache -->
     <script>
         // ⚠️ INCREMENTAR SEMPRE QUE HOUVER MUDANÇAS IMPORTANTES
-        const APP_VERSION = '3.0.0'; // 🔥 REFATORAÇÃO COMPLETA: SupplierManager, CacheManager, FECHAMENTO corrigido
+        const APP_VERSION = '4.0.0'; // 🔥 CORREÇÃO FECHAMENTO + ATUALIZAÇÃO OBRIGATÓRIA
         const VERSION_KEY = 'app_version_refeicoes';
+        
+        // ⚠️ BLOQUEAR USO SE VERSÃO ANTIGA
+        function bloquearSistema() {
+            // Ocultar tudo
+            document.body.innerHTML = `
+                <div style="
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 999999;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                ">
+                    <div style="
+                        background: white;
+                        padding: 40px;
+                        border-radius: 20px;
+                        text-align: center;
+                        max-width: 500px;
+                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                    ">
+                        <div style="font-size: 80px; margin-bottom: 20px;">⚠️</div>
+                        <h1 style="color: #dc2626; font-size: 28px; margin-bottom: 15px;">
+                            ATUALIZAÇÃO OBRIGATÓRIA
+                        </h1>
+                        <p style="color: #666; font-size: 16px; line-height: 1.6; margin-bottom: 25px;">
+                            Sua versão está <strong>DESATUALIZADA</strong> e pode enviar pedidos <strong>INCORRETOS</strong>.<br><br>
+                            🔥 Versão necessária: <strong>v4.0.0</strong><br>
+                            ⚠️ Sistema BLOQUEADO até atualizar!
+                        </p>
+                        <button onclick="forcarAtualizacaoObrigatoria()" style="
+                            background: #dc2626;
+                            color: white;
+                            border: none;
+                            padding: 18px 40px;
+                            font-size: 18px;
+                            font-weight: 600;
+                            border-radius: 12px;
+                            cursor: pointer;
+                            width: 100%;
+                            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+                        ">
+                            🔄 ATUALIZAR AGORA
+                        </button>
+                        <p style="color: #999; font-size: 12px; margin-top: 20px;">
+                            Após atualizar, feche e reabra o app
+                        </p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Função para atualização OBRIGATÓRIA
+        function forcarAtualizacaoObrigatoria() {
+            console.log('🔥 FORÇANDO ATUALIZAÇÃO OBRIGATÓRIA...');
+            
+            // Limpar TUDO
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // Limpar cookies
+            document.cookie.split(";").forEach(c => { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+            });
+            
+            // Limpar caches
+            if ('caches' in window) {
+                caches.keys().then(names => {
+                    names.forEach(name => caches.delete(name));
+                });
+            }
+            
+            // Desregistrar Service Worker
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(registrations => {
+                    registrations.forEach(reg => reg.unregister());
+                });
+            }
+            
+            // Salvar versão nova
+            localStorage.setItem(VERSION_KEY, APP_VERSION);
+            
+            alert('✅ Atualização concluída!\n\nO app vai recarregar agora.\n\nSe necessário, FECHE e REABRA o app completamente.');
+            
+            // Recarregar com força máxima
+            setTimeout(() => {
+                window.location.href = window.location.href.split('?')[0] + '?force=' + Date.now();
+            }, 500);
+        }
         
         // Verificar se precisa forçar atualização
         function checkForUpdates() {
             const storedVersion = localStorage.getItem(VERSION_KEY);
             
+            // ⚠️ SE VERSÃO ANTIGA OU NÃO EXISTE - BLOQUEAR SISTEMA
             if (!storedVersion || storedVersion !== APP_VERSION) {
-                console.log(`🔄 Nova versão detectada: ${APP_VERSION} (anterior: ${storedVersion || 'N/A'})`);
+                console.log(`⚠️ VERSÃO DESATUALIZADA: ${storedVersion || 'N/A'} -> BLOQUEANDO SISTEMA!`);
                 
-                // 🔥 LIMPEZA AGRESSIVA PARA v3.0.0
-                console.log('🧹 Limpando TUDO para v3.0.0...');
-                
-                // 1. Limpar TODOS os caches do Service Worker
-                if ('caches' in window) {
-                    caches.keys().then(names => {
-                        console.log(`🗑️ Limpando ${names.length} caches do Service Worker...`);
-                        names.forEach(name => {
-                            caches.delete(name);
-                            console.log(`   ✅ Cache deletado: ${name}`);
-                        });
-                    });
-                }
-                
-                // 2. Limpar localStorage (exceto versão)
-                const keysToPreserve = [VERSION_KEY];
-                Object.keys(localStorage).forEach(key => {
-                    if (!keysToPreserve.includes(key)) {
-                        localStorage.removeItem(key);
-                    }
-                });
-                console.log('🗑️ localStorage limpo');
-                
-                // 3. Limpar sessionStorage completamente
-                sessionStorage.clear();
-                console.log('🗑️ sessionStorage limpo');
-                
-                // 4. Limpar cookies do sistema
-                document.cookie.split(";").forEach(function(c) { 
-                    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
-                });
-                console.log('🗑️ Cookies limpos');
-                
-                // 5. Desregistrar Service Worker antigo
-                if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.getRegistrations().then(registrations => {
-                        registrations.forEach(registration => {
-                            registration.unregister();
-                            console.log('🗑️ Service Worker desregistrado');
-                        });
-                    });
-                }
-                
-                // Salvar nova versão
-                localStorage.setItem(VERSION_KEY, APP_VERSION);
-                
-                // Mostrar alerta de atualização (com delay para processar limpeza)
+                // BLOQUEAR O SISTEMA IMEDIATAMENTE
                 setTimeout(() => {
-                    alert(
-                        `🔥 ATUALIZAÇÃO IMPORTANTE - v${APP_VERSION}\n\n` +
-                        `⚠️ MUDANÇAS CRÍTICAS:\n` +
-                        `• Sistema completamente refatorado\n` +
-                        `• Correção do campo FECHAMENTO\n` +
-                        `• Cache inteligente implementado\n` +
-                        `• Performance melhorada\n\n` +
-                        `✅ Cache limpo automaticamente\n` +
-                        `✅ Tudo pronto para uso! 🚀\n\n` +
-                        `📱 Se tiver problemas, feche e reabra o app.`
-                    );
-                    
-                    // 6. Recarregar página com força total após confirmar
-                    setTimeout(() => {
-                        window.location.href = window.location.href.split('?')[0] + '?v=' + Date.now();
-                    }, 1000);
-                }, 1500);
+                    bloquearSistema();
+                }, 100);
+                
+                return; // NÃO deixar continuar
             }
+            
+            console.log(`✅ Versão correta: ${APP_VERSION}`);
         }
         
         // 🔥 FUNÇÃO DE EMERGÊNCIA - Forçar atualização total
@@ -2119,13 +2157,13 @@
                     Use se houver problemas de sincronização
                 </p>
                 <p style="font-size: 10px; color: #999; margin: 0;">
-                    v<span id="appVersionDisplay">3.0.0</span> <!-- 🔥 ATUALIZAR AQUI TAMBÉM -->
+                    v<span id="appVersionDisplay">4.0.0</span> <!-- 🔥 ATUALIZAR AQUI TAMBÉM -->
                 </p>
                 
                 <!-- 🆕 BOTÃO DE EMERGÊNCIA -->
                 <button class="btn btn-outline-secondary btn-sm" onclick="forcarAtualizacaoTotal()" 
                         style="font-size: 11px; padding: 6px 12px; margin-top: 8px; background: #dc2626; color: white; border-color: #dc2626;">
-                    🔥 Forçar Atualização v3.0
+                    🔥 Forçar Atualização v4.0
                 </button>
             </div>
             
