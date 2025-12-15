@@ -817,15 +817,16 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 else:
                     print("⚠️ Não foi possível obter estrutura da tabela")
                 
-                # Query COMPLETA com todos os campos disponíveis + APROVADO_POR + FECHAMENTO + AFERIU_TEMPERATURA
+                # Query COMPLETA com todos os campos disponíveis + APROVADO_POR + AFERIU_TEMPERATURA
+                # ✅ FECHAMENTO removido - será preenchido pela TRIGGER do SQL
                 query = """
                 INSERT INTO PEDIDOS (
                     DATA_RETIRADA, DATA_ENVIO1, PROJETO, COORDENADOR, SUPERVISOR, 
                     LIDER, NOME_LIDER, FAZENDA, TIPO_REFEICAO, CIDADE_PRESTACAO_DO_SERVICO,
                     FORNECEDOR, VALOR_PAGO, COLABORADORES, TOTAL_COLABORADORES, A_CONTRATAR,
                     RESPONSAVEL_PELO_CARTAO, PAGCORP, HOSPEDADO, NOME_DO_HOTEL, VALOR_DIARIA,
-                    TOTAL_PAGAR, APROVADO_POR, OBSERVACOES, FECHAMENTO, AFERIU_TEMPERATURA
-                ) VALUES (%s, DATEADD(hour, -6, GETUTCDATE()), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    TOTAL_PAGAR, APROVADO_POR, OBSERVACOES, AFERIU_TEMPERATURA
+                ) VALUES (%s, DATEADD(hour, -6, GETUTCDATE()), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 
                 # Extrair TODOS os dados do pedido com MAPEAMENTO CORRETO
@@ -876,8 +877,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 # APROVADO_POR = Texto fixo
                 aprovado_por = 'ELAINE KLUG'
                 
-                # FECHAMENTO = Da tabela de fornecedores
-                fechamento = pedido_data.get('fechamento_fornecedor', '')
+                # ✅ FECHAMENTO removido - será preenchido pela TRIGGER do SQL
                 
                 # 🎯 CAPTURAR AFERIU_TEMPERATURA DO FRONTEND
                 aferiu_temperatura_frontend = pedido_data.get('aferiu_temperatura', '')
@@ -907,14 +907,15 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 print(f"   HOSPEDADO: {hospedado}")
                 print(f"   NOME HOTEL: {nome_hotel}")
                 print(f"   VALOR DIÁRIA: R$ {valor_diaria}")
-                print(f"   FECHAMENTO: {fechamento}")
+                # ✅ FECHAMENTO removido - será preenchido pela TRIGGER do SQL
                 
                 resultado = executar_query(query, [
                     data_retirada, projeto, coordenador, supervisor, lider, nome_lider,
                     fazenda, tipo_refeicao, cidade, fornecedor, valor_pago, 
                     colaboradores_nomes, total_colaboradores, a_contratar,
                     responsavel_cartao, pagcorp, hospedado, nome_hotel, valor_diaria,
-                    total_pagar, aprovado_por, observacoes, fechamento, aferiu_temperatura_frontend
+                    total_pagar, aprovado_por, observacoes, aferiu_temperatura_frontend
+                    # ✅ fechamento removido - será preenchido pela TRIGGER
                 ])
                 
                 if resultado is not None and isinstance(resultado, dict) and 'inserted_id' in resultado:

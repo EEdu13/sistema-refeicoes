@@ -7433,18 +7433,17 @@ var templateParams = {
                     console.log(`⚠️ Nenhum dado de organograma disponível`);
                 }
                 
-                // 🎯 USAR SUPPLIERMANAGER INTELIGENTE PARA FECHAMENTO
+                // 🎯 USAR SUPPLIERMANAGER INTELIGENTE PARA FAZENDA
                 const supplierInfo = SupplierManager.getInfo(mealType);
-                // supplier já foi declarado acima, apenas reutilizar
                 let fazendaFornecedor = supplierInfo?.cached?.FAZENDA || supplierInfo?.cached?.LOCAL || '';
-                let fechamentoFornecedor = SupplierManager.getFechamento(mealType);
+                // ✅ FECHAMENTO será preenchido automaticamente pela TRIGGER do SQL
 
                 console.log(`🎯 FORNECEDOR INFO:`, {
                     nome: supplier,
                     customizado: supplierInfo?.isCustom,
                     noCache: supplierInfo?.inCache,
-                    fazenda: fazendaFornecedor,
-                    fechamento: fechamentoFornecedor
+                    fazenda: fazendaFornecedor
+                    // ✅ FECHAMENTO removido - será preenchido pelo banco
                 });
                 
                 // Coletar apenas os nomes dos colaboradores selecionados (NÃO incluir A CONTRATAR aqui)
@@ -7530,7 +7529,7 @@ var templateParams = {
                     equipe: equipe, // LIDER = equipe digitada (ex: 700AA)
                     nome_lider_organograma: nomeLiderOrganograma, // NOME_LIDER = nome do líder do organograma
                     fazenda_digitada: fazendaDigitada, // FAZENDA = SEMPRE o que foi digitado pelo usuário
-                    fechamento_fornecedor: fechamentoFornecedor, // FECHAMENTO = da tabela fornecedores
+                    // ✅ FECHAMENTO removido - será preenchido pela TRIGGER do SQL
                     
                     cidade_prestacao_servico: cidade,
                     
@@ -7568,7 +7567,7 @@ var templateParams = {
                 console.log(`      FAZENDA: ${fazendaDigitada} (IGNORANDO fornecedor: ${fazendaFornecedor})`);
                 console.log(`      PAGCORP: ${pagcorpNumero}`);
                 console.log(`      HOSPEDADO: ${hospedadoFormatado} (${hospedadoFormatado === 'SIM' ? `${nomeHotel}, R$ ${valorDiaria}` : 'sem hotel'})`);
-                console.log(`      FECHAMENTO: ${fechamentoFornecedor}`);
+                // ✅ FECHAMENTO removido - será preenchido pela TRIGGER do SQL
                 console.log(`   📄 Colaboradores (sem ícones): ${colaboradoresNomesLimpos || 'Nenhum'}`);
                 console.log(pedidoData);
                 
