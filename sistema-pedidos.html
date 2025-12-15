@@ -168,6 +168,94 @@
             }, 500);
         }
         
+        // 📱 CONTROLE DE INSTALAÇÃO PWA
+        let deferredPrompt = null;
+        
+        // Detectar se é iOS
+        function isIOS() {
+            return /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+        }
+        
+        // Detectar se já está instalado
+        function isInstalled() {
+            // Modo standalone = PWA instalado
+            if (window.matchMedia('(display-mode: standalone)').matches) {
+                return true;
+            }
+            // iOS standalone
+            if (navigator.standalone === true) {
+                return true;
+            }
+            return false;
+        }
+        
+        // Capturar evento de instalação (Android/Chrome)
+        window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('📱 Evento beforeinstallprompt capturado');
+            e.preventDefault(); // Impedir popup automático
+            deferredPrompt = e; // Guardar para usar depois
+            
+            // Mostrar botão de instalação
+            const installContainer = document.getElementById('installPwaContainer');
+            if (installContainer) {
+                installContainer.classList.add('show');
+            }
+        });
+        
+        // Função para instalar PWA
+        async function instalarPWA() {
+            if (!deferredPrompt) {
+                console.log('⚠️ deferredPrompt não disponível');
+                return;
+            }
+            
+            console.log('📱 Iniciando instalação do PWA...');
+            
+            // Mostrar dialog nativo de instalação
+            deferredPrompt.prompt();
+            
+            // Aguardar escolha do usuário
+            const { outcome } = await deferredPrompt.userChoice;
+            
+            if (outcome === 'accepted') {
+                console.log('✅ PWA instalado com sucesso!');
+            } else {
+                console.log('❌ Usuário cancelou a instalação');
+            }
+            
+            // Limpar prompt e esconder botão
+            deferredPrompt = null;
+            const installContainer = document.getElementById('installPwaContainer');
+            if (installContainer) {
+                installContainer.classList.remove('show');
+            }
+        }
+        
+        // Detectar ambiente e mostrar instruções adequadas
+        window.addEventListener('DOMContentLoaded', () => {
+            // Se já está instalado, não mostrar nada
+            if (isInstalled()) {
+                console.log('✅ PWA já instalado - ocultando botões');
+                return;
+            }
+            
+            // Se é iOS, mostrar instruções manuais
+            if (isIOS()) {
+                console.log('🍎 iOS detectado - mostrando instruções manuais');
+                const iosInstructions = document.getElementById('installIosInstructions');
+                if (iosInstructions) {
+                    iosInstructions.classList.add('show');
+                }
+            }
+            // Android/Chrome: aguardar evento beforeinstallprompt
+            
+            // Adicionar listener no botão de instalação
+            const btnInstalar = document.getElementById('btnInstalarPwa');
+            if (btnInstalar) {
+                btnInstalar.addEventListener('click', instalarPWA);
+            }
+        });
+        
         // Executar verificação ao carregar
         document.addEventListener('DOMContentLoaded', () => {
             checkForUpdates();
@@ -1828,6 +1916,93 @@
             }
         }
 
+        /* Botão de Instalação PWA */
+        .install-pwa-container {
+            margin-top: 25px;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            display: none; /* Oculto por padrão */
+        }
+
+        .install-pwa-container.show {
+            display: block;
+        }
+
+        .install-pwa-title {
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .install-pwa-subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+
+        .btn-install-pwa {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-install-pwa:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-install-pwa:active {
+            transform: translateY(0);
+        }
+
+        /* Instruções iOS */
+        .install-ios-instructions {
+            margin-top: 25px;
+            padding: 20px;
+            background: #f0f9ff;
+            border: 2px solid #0ea5e9;
+            border-radius: 12px;
+            text-align: left;
+            display: none;
+        }
+
+        .install-ios-instructions.show {
+            display: block;
+        }
+
+        .install-ios-title {
+            color: #0369a1;
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .install-ios-steps {
+            color: #0c4a6e;
+            font-size: 13px;
+            line-height: 1.6;
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .install-ios-steps li {
+            margin-bottom: 8px;
+        }
+
         /* Loading Overlay */
         .loading-overlay {
             position: fixed;
@@ -1952,6 +2127,27 @@
                         style="font-size: 11px; padding: 6px 12px; margin-top: 8px; background: #dc2626; color: white; border-color: #dc2626;">
                     🔥 Forçar Atualização v3.0
                 </button>
+            </div>
+            
+            <!-- 📱 BOTÃO DE INSTALAÇÃO PWA (Android/Chrome) -->
+            <div id="installPwaContainer" class="install-pwa-container">
+                <div class="install-pwa-title">📱 Instalar Aplicativo</div>
+                <div class="install-pwa-subtitle">Acesse mais rápido e trabalhe offline!</div>
+                <button id="btnInstalarPwa" class="btn-install-pwa">
+                    ⬇️ Instalar Agora
+                </button>
+            </div>
+            
+            <!-- 🍎 INSTRUÇÕES PARA iOS -->
+            <div id="installIosInstructions" class="install-ios-instructions">
+                <div class="install-ios-title">
+                    🍎 Como instalar no iPhone/iPad
+                </div>
+                <ol class="install-ios-steps">
+                    <li>Toque no botão <strong>Compartilhar</strong> (🔗)</li>
+                    <li>Role para baixo e toque em <strong>"Adicionar à Tela de Início"</strong></li>
+                    <li>Toque em <strong>"Adicionar"</strong> no canto superior direito</li>
+                </ol>
             </div>
         </div>
 
@@ -7123,13 +7319,8 @@ var templateParams = {
                 const option = document.createElement('option');
                 option.value = fornecedor.FORNECEDOR.toLowerCase().replace(/\s+/g, '_');
                 
-                // Truncar texto longo para mobile
-                let displayText = fornecedor.FORNECEDOR;
-                if (window.innerWidth <= 480 && displayText.length > 35) {
-                    displayText = displayText.substring(0, 32) + '...';
-                }
-                
-                option.textContent = displayText;
+                // 🎯 NOME COMPLETO - sem truncar
+                option.textContent = fornecedor.FORNECEDOR;
                 option.dataset.preco = fornecedor.VALOR;
                 option.title = fornecedor.FORNECEDOR; // Tooltip com nome completo
                 select.insertBefore(option, select.lastElementChild);
