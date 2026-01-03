@@ -2652,17 +2652,16 @@
                 <div class="form-group">
                     <label>�📷 Foto da Retirada</label>
                     <!-- Input para câmera -->
-                    <input type="file" class="form-control hidden" id="fileRetiradaCamera" accept="image/*" capture="environment">
+                    <input type="file" class="form-control hidden" id="fileRetiradaCamera" accept="image/*" capture="environment" onchange="fileRetiradaHandler(event)">
                     <!-- Input para galeria -->
-                    <input type="file" class="form-control hidden" id="fileRetirada" accept="image/*">
+                    <input type="file" class="form-control hidden" id="fileRetirada" accept="image/*" onchange="fileRetiradaHandler(event)">
                     <div class="photo-options">
                         <button type="button" class="btn btn-secondary" onclick="document.getElementById('fileRetiradaCamera').click()">📷 Tirar Foto</button>
                         <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('fileRetirada').click()">📎 Anexar</button>
-                        <button type="button" class="btn btn-info btn-sm" onclick="debugFileInput('fileRetirada')" style="margin-left: 10px;">🔍 Debug</button>
                     </div>
                     <div id="previewRetirada" class="file-preview">
                         <span>📷 Nenhuma foto capturada</span>
-                        <canvas id="canvasRetirada" style="display:none; max-width: 100%; height: auto;"></canvas>
+                        <canvas id="canvasRetirada" style="display:none; max-width: 100%; height: auto; border-radius: 8px; margin-top: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></canvas>
                     </div>
                 </div>
             </div>
@@ -2685,17 +2684,16 @@
                 <div class="form-group">
                     <label>📷 Foto do Consumo</label>
                     <!-- Input para câmera -->
-                    <input type="file" class="form-control hidden" id="fileConsumoCamera" accept="image/*" capture="environment">
+                    <input type="file" class="form-control hidden" id="fileConsumoCamera" accept="image/*" capture="environment" onchange="fileConsumoHandler(event)">
                     <!-- Input para galeria -->
-                    <input type="file" class="form-control hidden" id="fileConsumo" accept="image/*">
+                    <input type="file" class="form-control hidden" id="fileConsumo" accept="image/*" onchange="fileConsumoHandler(event)">
                     <div class="photo-options">
                         <button type="button" class="btn btn-secondary" onclick="document.getElementById('fileConsumoCamera').click()">📷 Tirar Foto</button>
                         <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('fileConsumo').click()">📎 Anexar</button>
-                        <button type="button" class="btn btn-info btn-sm" onclick="debugFileInput('fileConsumo')" style="margin-left: 10px;">🔍 Debug</button>
                     </div>
                     <div id="previewConsumo" class="file-preview">
                         <span>📷 Nenhuma foto capturada</span>
-                        <canvas id="canvasConsumo" style="display:none; max-width: 100%; height: auto;"></canvas>
+                        <canvas id="canvasConsumo" style="display:none; max-width: 100%; height: auto; border-radius: 8px; margin-top: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></canvas>
                     </div>
                 </div>
             </div>
@@ -3840,219 +3838,137 @@
             }
         }
 
-        // Função para preview de arquivos e desenhar no canvas
+        // ⚠️ NÃO USAR MAIS - Event listeners removidos para evitar travamento
+        // Agora usamos onchange inline diretamente nos inputs
         function setupFilePreview() {
-            console.log('🔧 Configurando listeners para captura de imagens...');
-            
-            // Verificar se os elementos existem antes de adicionar listeners
-            const fileRetirada = document.getElementById('fileRetirada');
-            const fileRetiradaCamera = document.getElementById('fileRetiradaCamera');
-            const fileConsumo = document.getElementById('fileConsumo');
-            const fileConsumoCamera = document.getElementById('fileConsumoCamera');
-            
-            if (!fileRetirada) {
-                console.log('❌ Elemento fileRetirada não encontrado!');
-                return;
-            }
-            
-            if (!fileConsumo) {
-                console.log('❌ Elemento fileConsumo não encontrado!');
-                return;
-            }
-            
-            // ✅ REMOVER EVENT LISTENERS EXISTENTES PARA EVITAR DUPLICAÇÃO
-            fileRetirada.removeEventListener('change', fileRetiradaHandler);
-            fileConsumo.removeEventListener('change', fileConsumoHandler);
-            
-            if (fileRetiradaCamera) {
-                fileRetiradaCamera.removeEventListener('change', fileRetiradaHandler);
-            }
-            
-            if (fileConsumoCamera) {
-                fileConsumoCamera.removeEventListener('change', fileConsumoHandler);
-            }
-            
-            // ✅ ADICIONAR NOVOS EVENT LISTENERS
-            fileRetirada.addEventListener('change', fileRetiradaHandler);
-            fileConsumo.addEventListener('change', fileConsumoHandler);
-            
-            if (fileRetiradaCamera) {
-                fileRetiradaCamera.addEventListener('change', fileRetiradaHandler);
-            }
-            
-            if (fileConsumoCamera) {
-                fileConsumoCamera.addEventListener('change', fileConsumoHandler);
-            }
-            
-            console.log('✅ Event listeners configurados para todos os inputs de arquivo');
+            console.log('⚠️ setupFilePreview() está deprecated - usando onchange inline');
+            // Função mantida vazia para compatibilidade
         }
 
-        // ✅ HANDLERS SEPARADOS PARA EVITAR DUPLICAÇÃO
+        // ✅ HANDLER SIMPLIFICADO - Chamado via onchange inline (SEM event listeners)
         function fileRetiradaHandler(e) {
             const inputId = e.target.id;
             console.log(`📷 RETIRADA - Input acionado: ${inputId}`);
-            console.log(`📷 RETIRADA - Tem capture: ${e.target.hasAttribute('capture')}`);
-            console.log(`📷 RETIRADA - Arquivo selecionado:`, e.target.files[0]);
             var file = e.target.files[0];
             var preview = document.getElementById('previewRetirada');
             var canvas = document.getElementById('canvasRetirada');
             
-            if (!preview) {
-                console.log('❌ Elemento previewRetirada não encontrado!');
-                return;
-            }
-            
-            if (!canvas) {
-                console.log('❌ Elemento canvasRetirada não encontrado!');
+            if (!preview || !canvas) {
+                console.log('❌ Elementos não encontrados!');
                 return;
             }
             
             if (file) {
                 console.log('✅ Processando arquivo de retirada:', file.name, file.size, 'bytes');
-                preview.className = 'file-preview has-file';
-                preview.innerHTML = `📎 ${file.name} (${Math.round(file.size / 1024)} KB)<br>✅ Imagem capturada!`;
                 
-                // Desenhar imagem no canvas para captura posterior
+                // Desenhar imagem no canvas
                 var reader = new FileReader();
                 reader.onload = function(event) {
                     var img = new Image();
                     img.onload = function() {
-                        // Verificar se canvas ainda existe
-                        if (!canvas) {
-                            console.log('❌ Canvas foi removido do DOM!');
-                            return;
-                        }
-                        
-                        // Mostrar o canvas
+                        // Configurar canvas
                         canvas.style.display = 'block';
-                        canvas.width = Math.min(img.width, 800); // Máximo 800px de largura
+                        canvas.width = Math.min(img.width, 800);
                         canvas.height = (canvas.width / img.width) * img.height;
                         
                         var ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                         
-                        console.log('✅ Imagem de retirada carregada no canvas:', canvas.width, 'x', canvas.height);
-                        
-                        // SALVAR IMAGEM EM VARIÁVEL GLOBAL IMEDIATAMENTE
+                        // SALVAR IMAGEM GLOBALMENTE
                         globalImageRetirada = canvas.toDataURL('image/jpeg', 0.8);
                         imageTimestamps.retirada = Date.now();
                         
-                        console.log('💾 Imagem de RETIRADA salva globalmente:', globalImageRetirada.length, 'caracteres');
-                        console.log('⏰ Timestamp retirada:', imageTimestamps.retirada);
+                        console.log('💾 Imagem de RETIRADA salva:', globalImageRetirada.length, 'caracteres');
                         
                         // Marcar que a imagem foi carregada
                         canvas.setAttribute('data-image-loaded', 'true');
                         canvas.setAttribute('data-load-timestamp', Date.now());
+                        
+                        // ✅ MOSTRAR PRÉVIA GRANDE DA FOTO
+                        preview.className = 'file-preview has-file';
+                        preview.innerHTML = `
+                            <div style="text-align: center; margin-bottom: 10px;">
+                                <strong style="color: #059669;">✅ Foto da Retirada Capturada!</strong><br>
+                                <small style="color: #6b7280;">${file.name} (${Math.round(file.size / 1024)} KB)</small>
+                            </div>
+                        `;
+                        preview.appendChild(canvas);
                     };
                     img.src = event.target.result;
                 };
                 reader.readAsDataURL(file);
             } else {
                 preview.className = 'file-preview';
-                // NÃO sobrescrever innerHTML - apenas atualizar o texto, preservando o canvas
-                const span = preview.querySelector('span');
-                if (span) {
-                    span.textContent = '📷 Nenhuma foto capturada';
-                } else {
-                    // Se não existe span, criar um sem remover o canvas
-                    const newSpan = document.createElement('span');
-                    newSpan.textContent = '📷 Nenhuma foto capturada';
-                    preview.insertBefore(newSpan, preview.firstChild);
-                }
+                preview.innerHTML = '<span>📷 Nenhuma foto capturada</span>';
                 canvas.style.display = 'none';
-                
-                // Limpar marcadores de imagem carregada
                 canvas.removeAttribute('data-image-loaded');
                 canvas.removeAttribute('data-load-timestamp');
-                
-                // LIMPAR VARIÁVEL GLOBAL DE RETIRADA
                 globalImageRetirada = null;
                 imageTimestamps.retirada = null;
-                console.log('🗑️ Imagem de RETIRADA removida das variáveis globais');
+                console.log('🗑️ Imagem de RETIRADA removida');
             }
         }
 
         function fileConsumoHandler(e) {
             const inputId = e.target.id;
             console.log(`🍽️ CONSUMO - Input acionado: ${inputId}`);
-            console.log(`🍽️ CONSUMO - Tem capture: ${e.target.hasAttribute('capture')}`);
-            console.log(`🍽️ CONSUMO - Arquivo selecionado:`, e.target.files[0]);
             var file = e.target.files[0];
             var preview = document.getElementById('previewConsumo');
             var canvas = document.getElementById('canvasConsumo');
             
-            if (!preview) {
-                console.log('❌ Elemento previewConsumo não encontrado!');
-                return;
-            }
-            
-            if (!canvas) {
-                console.log('❌ Elemento canvasConsumo não encontrado!');
+            if (!preview || !canvas) {
+                console.log('❌ Elementos não encontrados!');
                 return;
             }
             
             if (file) {
                 console.log('✅ Processando arquivo de consumo:', file.name, file.size, 'bytes');
-                preview.className = 'file-preview has-file';
-                preview.innerHTML = `📎 ${file.name} (${Math.round(file.size / 1024)} KB)<br>✅ Imagem capturada!`;
                 
-                // Desenhar imagem no canvas para captura posterior
+                // Desenhar imagem no canvas
                 var reader = new FileReader();
                 reader.onload = function(event) {
                     var img = new Image();
                     img.onload = function() {
-                        // Verificar se canvas ainda existe
-                        if (!canvas) {
-                            console.log('❌ Canvas foi removido do DOM!');
-                            return;
-                        }
-                        
-                        // Mostrar o canvas
+                        // Configurar canvas
                         canvas.style.display = 'block';
-                        canvas.width = Math.min(img.width, 800); // Máximo 800px de largura
+                        canvas.width = Math.min(img.width, 800);
                         canvas.height = (canvas.width / img.width) * img.height;
                         
                         var ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                         
-                        console.log('✅ Imagem de consumo carregada no canvas:', canvas.width, 'x', canvas.height);
-                        
-                        // SALVAR IMAGEM EM VARIÁVEL GLOBAL IMEDIATAMENTE
+                        // SALVAR IMAGEM GLOBALMENTE
                         globalImageConsumo = canvas.toDataURL('image/jpeg', 0.8);
                         imageTimestamps.consumo = Date.now();
                         
-                        console.log('💾 Imagem de CONSUMO salva globalmente:', globalImageConsumo.length, 'caracteres');
-                        console.log('⏰ Timestamp consumo:', imageTimestamps.consumo);
+                        console.log('💾 Imagem de CONSUMO salva:', globalImageConsumo.length, 'caracteres');
                         
                         // Marcar que a imagem foi carregada
                         canvas.setAttribute('data-image-loaded', 'true');
                         canvas.setAttribute('data-load-timestamp', Date.now());
+                        
+                        // ✅ MOSTRAR PRÉVIA GRANDE DA FOTO
+                        preview.className = 'file-preview has-file';
+                        preview.innerHTML = `
+                            <div style="text-align: center; margin-bottom: 10px;">
+                                <strong style="color: #059669;">✅ Foto do Consumo Capturada!</strong><br>
+                                <small style="color: #6b7280;">${file.name} (${Math.round(file.size / 1024)} KB)</small>
+                            </div>
+                        `;
+                        preview.appendChild(canvas);
                     };
                     img.src = event.target.result;
                 };
                 reader.readAsDataURL(file);
             } else {
                 preview.className = 'file-preview';
-                // NÃO sobrescrever innerHTML - apenas atualizar o texto, preservando o canvas
-                const span = preview.querySelector('span');
-                if (span) {
-                    span.textContent = '📷 Nenhuma foto capturada';
-                } else {
-                    // Se não existe span, criar um sem remover o canvas
-                    const newSpan = document.createElement('span');
-                    newSpan.textContent = '📷 Nenhuma foto capturada';
-                    preview.insertBefore(newSpan, preview.firstChild);
-                }
+                preview.innerHTML = '<span>📷 Nenhuma foto capturada</span>';
                 canvas.style.display = 'none';
-                
-                // Limpar marcadores de imagem carregada
                 canvas.removeAttribute('data-image-loaded');
                 canvas.removeAttribute('data-load-timestamp');
-                
-                // LIMPAR VARIÁVEL GLOBAL DE CONSUMO
                 globalImageConsumo = null;
                 imageTimestamps.consumo = null;
-                console.log('🗑️ Imagem de CONSUMO removida das variáveis globais');
+                console.log('🗑️ Imagem de CONSUMO removida');
             }
         }
 
