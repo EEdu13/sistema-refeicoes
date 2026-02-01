@@ -6210,9 +6210,11 @@ var templateParams = {
             document.getElementById('temperatureScreen').classList.add('hidden');
             document.getElementById('problemScreen').classList.add('hidden');
             
-            // Limpar campos
-            document.getElementById('projetoInput').value = '';
-            document.getElementById('equipeInput').value = '';
+            // Limpar campos (com verificação de existência)
+            const projetoInput = document.getElementById('projetoInput');
+            const equipeInput = document.getElementById('equipeInput');
+            if (projetoInput) projetoInput.value = '';
+            if (equipeInput) equipeInput.value = '';
             
             alert('✅ Logout realizado com sucesso!');
             console.log('✅ Logout concluído');
