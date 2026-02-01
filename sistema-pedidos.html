@@ -7227,6 +7227,10 @@ var templateParams = {
             const botao = document.getElementById('btn-atualizar-dados');
             if (!botao) return;
             
+            // 🔄 RESETAR COOLDOWNS - Usuário quer forçar atualização
+            RequestController.reset('buscarDadosPorProjetoEquipe');
+            RequestController.reset('loadPendingTemperatures');
+            
             // Verificar se há conexão com internet
             if (!navigator.onLine) {
                 alert('❌ Sem conexão com a internet!\n\nPor favor, verifique sua conexão e tente novamente.');
