@@ -51,18 +51,22 @@ AZURE_BLOB_CONFIG = {
 # Configurações Azure carregadas
 
 def conectar_azure_sql():
-    """Conecta ao Azure SQL Server"""
+    """Conecta ao Azure SQL Server com timeout"""
     try:
         # Usando pymssql em vez de pyodbc para melhor compatibilidade no Railway
         conn = pymssql.connect(
             server=AZURE_CONFIG['server'],
             database=AZURE_CONFIG['database'],
             user=AZURE_CONFIG['username'],
-            password=AZURE_CONFIG['password']
+            password=AZURE_CONFIG['password'],
+            timeout=30,  # Timeout de conexão de 30 segundos
+            login_timeout=15  # Timeout de login de 15 segundos
         )
         return conn
     except Exception as e:
         print(f"❌ Erro ao conectar no Azure SQL: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def upload_imagem_blob(imagem_base64, nome_arquivo):
@@ -247,6 +251,16 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
         parsed_path = urllib.parse.urlparse(self.path)
         path = parsed_path.path
         query_params = urllib.parse.parse_qs(parsed_path.query)
+        
+        # 🛡️ HEALTH CHECK - Railway usa isso para verificar se o servidor está vivo
+        if path == '/health' or path == '/healthz' or path == '/_health':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            response = {"status": "ok", "timestamp": datetime.now().isoformat()}
+            self.wfile.write(json.dumps(response).encode('utf-8'))
+            return
         
         # Servir arquivos estáticos
         if path == '/' or path == '/index.html':
@@ -1204,6 +1218,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
 
 def main():
     import os
+    import sys
     
     # Railway fornece a porta via variável de ambiente PORT
     port = int(os.environ.get('PORT', 8082))
@@ -1212,6 +1227,7 @@ def main():
     print(f"📋 Sistema: Railway Deploy Ready!")
     print(f"🔧 APIs disponíveis:")
     print(f"   - http://localhost:{port}/api/teste-conexao")
+    print(f"   - http://localhost:{port}/health (health check)")
     print(f"   - http://localhost:{port}/")
     print(f"   - http://localhost:{port}/sistema-pedidos.html")
     print(f"🌐 CONECTANDO NO AZURE SQL REAL!")
@@ -1219,15 +1235,27 @@ def main():
     print(f"💾 Banco: Tabela_teste")
     print(f"❌ Para parar: Ctrl+C")
     print("=" * 60)
-    print("� RAILWAY READY!")
+    print("🚀 RAILWAY READY!")
     print("   Deploy: git push origin main")
     print("=" * 60)
+    sys.stdout.flush()  # Forçar output imediato para logs do Railway
     
-    with socketserver.TCPServer(("", port), RefeicaoHandler) as httpd:
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("\n🛑 Servidor parado.")
+    try:
+        # Permitir reuso do endereço para evitar "Address already in use"
+        socketserver.TCPServer.allow_reuse_address = True
+        
+        with socketserver.TCPServer(("", port), RefeicaoHandler) as httpd:
+            print(f"✅ Servidor escutando na porta {port}")
+            sys.stdout.flush()
+            try:
+                httpd.serve_forever()
+            except KeyboardInterrupt:
+                print("\n🛑 Servidor parado.")
+    except Exception as e:
+        print(f"❌ ERRO FATAL ao iniciar servidor: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

@@ -2756,6 +2756,45 @@
     </div>
 
     <script>
+        // 🛡️ SISTEMA DE CONTROLE DE REQUISIÇÕES (evita loops e requisições duplicadas)
+        const RequestController = {
+            _requests: {},
+            _cooldowns: {
+                'loadPendingTemperatures': 5000,  // 5 segundos
+                'buscarDadosPorProjetoEquipe': 10000, // 10 segundos
+                'buscarLiderDaEquipe': 10000,
+                'fazerLoginAutomatico': 15000  // 15 segundos
+            },
+            
+            canExecute(functionName) {
+                const now = Date.now();
+                const lastCall = this._requests[functionName] || 0;
+                const cooldown = this._cooldowns[functionName] || 3000;
+                
+                if (now - lastCall < cooldown) {
+                    console.log(`⏳ ${functionName} em cooldown (aguardar ${Math.ceil((cooldown - (now - lastCall)) / 1000)}s)`);
+                    return false;
+                }
+                return true;
+            },
+            
+            markExecuted(functionName) {
+                this._requests[functionName] = Date.now();
+            },
+            
+            reset(functionName) {
+                delete this._requests[functionName];
+            },
+            
+            resetAll() {
+                this._requests = {};
+            }
+        };
+        
+        // 🛡️ Flag para evitar inicializações múltiplas
+        let _sistemaInicializado = false;
+        let _loginEmProcesso = false;
+        
         // 🎯 COMPATIBILIDADE COM CÓDIGO LEGADO (getters/setters para AppState)
         Object.defineProperty(window, 'selectedMeals', {
             get() { return AppState.order.selectedMeals; },
@@ -3279,6 +3318,13 @@
         }
 
         async function loadPendingTemperatures() {
+            // 🛡️ PROTEÇÃO CONTRA REQUISIÇÕES REPETIDAS
+            if (!RequestController.canExecute('loadPendingTemperatures')) {
+                console.log('⏳ loadPendingTemperatures ignorada (cooldown ativo)');
+                return;
+            }
+            RequestController.markExecuted('loadPendingTemperatures');
+            
             console.log('📋 Carregando pendências reais do banco de dados...');
             
             // Limpar IDs processados antigos (mais de 24 horas)
@@ -4244,6 +4290,13 @@
         });
 
         document.addEventListener('DOMContentLoaded', async function() {
+            // 🛡️ EVITAR INICIALIZAÇÃO MÚLTIPLA
+            if (_sistemaInicializado) {
+                console.log('⚠️ Sistema já inicializado, ignorando DOMContentLoaded duplicado');
+                return;
+            }
+            _sistemaInicializado = true;
+            
             console.log('🚀 Inicializando sistema...');
             DOM.init(); // 🎯 Inicializar cache de elementos DOM
             
@@ -6166,6 +6219,20 @@ var templateParams = {
         }
         
         async function fazerLoginAutomatico(projeto, equipe) {
+            // 🛡️ PROTEÇÃO CONTRA LOGIN MÚLTIPLO
+            if (_loginEmProcesso) {
+                console.log('⏳ Login já em andamento, ignorando chamada duplicada');
+                return false;
+            }
+            
+            if (!RequestController.canExecute('fazerLoginAutomatico')) {
+                console.log('⏳ fazerLoginAutomatico ignorada (cooldown ativo)');
+                return false;
+            }
+            
+            _loginEmProcesso = true;
+            RequestController.markExecuted('fazerLoginAutomatico');
+            
             console.log('🔄 Fazendo login automático...');
             console.log(`👤 Projeto: ${projeto}, Equipe: ${equipe}`);
             
@@ -6208,6 +6275,7 @@ var templateParams = {
                     // Carregar pendências de temperatura
                     await loadPendingTemperatures();
                     updateSyncStatus();
+                    _loginEmProcesso = false;
                     return true;
                 }
                 
@@ -6219,12 +6287,14 @@ var templateParams = {
                     await loadPendingTemperatures();
                     updateSyncStatus();
                     console.log('✅ Login automático concluído (online)');
+                    _loginEmProcesso = false;
                     return true;
                 } else {
                     console.log('❌ Falha no login automático, mas mantendo acesso (modo gracioso)');
                     // Em vez de voltar para login, manter logado mas mostrar mensagem
                     await loadPendingTemperatures();
                     updateSyncStatus();
+                    _loginEmProcesso = false;
                     return true; // Manter logado mesmo com falha na API
                 }
             } catch (error) {
@@ -6233,6 +6303,7 @@ var templateParams = {
                 // Carregar pelo menos as pendências locais
                 await loadPendingTemperatures();
                 updateSyncStatus();
+                _loginEmProcesso = false;
                 return true; // Manter logado mesmo com erro
             }
         }
@@ -6833,6 +6904,14 @@ var templateParams = {
 
         // Função para buscar dados reais das APIs do Azure SQL
         async function buscarDadosPorProjetoEquipe(projeto, equipe) {
+            // 🛡️ PROTEÇÃO CONTRA REQUISIÇÕES REPETIDAS
+            if (!RequestController.canExecute('buscarDadosPorProjetoEquipe')) {
+                console.log('⏳ buscarDadosPorProjetoEquipe ignorada (cooldown ativo) - usando cache');
+                // Retornar true se já temos dados em cache
+                return !!(window.dadosFornecedores?.length || window.dadosColaboradores?.length);
+            }
+            RequestController.markExecuted('buscarDadosPorProjetoEquipe');
+            
             try {
                 console.log(`🔍 Buscando dados para projeto: ${projeto}, equipe: ${equipe}`);
                 
