@@ -3045,15 +3045,23 @@
                 // Fornecedor específico selecionado
                 input.style.display = 'none';
                 input.value = '';
-                priceSection.classList.remove('show');
-                
+
                 // Preencher automaticamente o preço do fornecedor selecionado
                 const selectedOption = select.options[select.selectedIndex];
                 if (selectedOption && selectedOption.dataset.preco) {
-                    if (priceInput) priceInput.value = parseFloat(selectedOption.dataset.preco).toFixed(2);
+                    const preco = parseFloat(selectedOption.dataset.preco);
+                    if (priceInput) priceInput.value = preco.toFixed(2);
+                }
+
+                // SEMPRE mostrar campo de preço para verificação/edição
+                priceSection.classList.add('show');
+
+                // Alertar se preço veio zerado do banco
+                if (priceInput && (!priceInput.value || parseFloat(priceInput.value) === 0)) {
+                    console.warn(`⚠️ Fornecedor "${selectedOption.text}" sem preço cadastrado`);
                 }
             }
-            
+
             updateSummary();
         }
 
@@ -3326,13 +3334,19 @@
             RequestController.markExecuted('loadPendingTemperatures');
             
             console.log('📋 Carregando pendências reais do banco de dados...');
-            
+
             // Limpar IDs processados antigos (mais de 24 horas)
             cleanOldProcessedIds();
-            
+
             try {
                 // 🎯 BUSCAR APENAS PENDÊNCIAS DA EQUIPE LOGADA
-                const equipeLogada = localStorage.getItem('equipe_logada') || 'SEM_EQUIPE';
+                const equipeLogada = localStorage.getItem('equipe_logada');
+                if (!equipeLogada) {
+                    console.log('⚠️ Nenhuma equipe logada - ignorando busca de pendências');
+                    pendingTemperatures = [];
+                    updatePendingTemperaturesList();
+                    return;
+                }
                 console.log('👥 Filtrando pendências para equipe:', equipeLogada);
                 
                 // Buscar pedidos reais que precisam de aferição de temperatura

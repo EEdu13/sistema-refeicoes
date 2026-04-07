@@ -192,28 +192,41 @@ def executar_query(query, params=None):
         conn.close()
 
 class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        """Override para evitar crash em log quando pipe quebra"""
+        try:
+            super().log_message(format, *args)
+        except BrokenPipeError:
+            pass
+
     def serve_html_file(self, filename):
         """Serve arquivos HTML estáticos"""
         try:
             with open(filename, 'r', encoding='utf-8') as file:
                 content = file.read()
-            
+
             self.send_response(200)
             self.send_header('Content-type', 'text/html; charset=utf-8')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(content.encode('utf-8'))
-            
+
+        except BrokenPipeError:
+            # Cliente desconectou antes de receber a resposta completa - ignorar
+            pass
         except FileNotFoundError:
             self.send_response(404)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
             self.wfile.write(b'<h1>404 - Arquivo nao encontrado</h1>')
         except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-            self.wfile.write(f'<h1>500 - Erro do servidor: {str(e)}</h1>'.encode('utf-8'))
+            try:
+                self.send_response(500)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(f'<h1>500 - Erro do servidor: {str(e)}</h1>'.encode('utf-8'))
+            except BrokenPipeError:
+                pass
 
     def serve_static_file(self, filename, content_type):
         """Serve arquivos estáticos (JS, JSON, CSS) com MIME type correto"""
@@ -221,30 +234,35 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
             # Determinar modo de leitura baseado no tipo
             mode = 'r' if content_type.startswith('text/') or content_type == 'application/json' or content_type == 'application/javascript' else 'rb'
             encoding = 'utf-8' if mode == 'r' else None
-            
+
             with open(filename, mode, encoding=encoding) as file:
                 content = file.read()
-            
+
             self.send_response(200)
             self.send_header('Content-type', f'{content_type}; charset=utf-8' if encoding else content_type)
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            
+
             if encoding:
                 self.wfile.write(content.encode('utf-8'))
             else:
                 self.wfile.write(content)
-                
+
+        except BrokenPipeError:
+            pass
         except FileNotFoundError:
             self.send_response(404)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
             self.wfile.write(b'<h1>404 - Arquivo nao encontrado</h1>')
         except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-            self.wfile.write(f'<h1>500 - Erro do servidor: {str(e)}</h1>'.encode('utf-8'))
+            try:
+                self.send_response(500)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(f'<h1>500 - Erro do servidor: {str(e)}</h1>'.encode('utf-8'))
+            except BrokenPipeError:
+                pass
 
     def do_GET(self):
         # Parse da URL
@@ -506,33 +524,29 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
             # Usar LIDER como critério de filtro se fornecido (LIDER contém o nome da equipe)
             if equipe_param and equipe_param != 'SEM_EQUIPE':
                 query = """
-                SELECT ID, DATA_RETIRADA, NOME_LIDER, TIPO_REFEICAO, FORNECEDOR, 
+                SELECT ID, DATA_RETIRADA, NOME_LIDER, TIPO_REFEICAO, FORNECEDOR,
                        TOTAL_COLABORADORES, TOTAL_PAGAR, DATA_ENVIO1, LIDER,
                        TEMP_RETIRADA, TEMP_CONSUMO, AFERIU_TEMPERATURA
-                FROM PEDIDOS 
-                WHERE (TIPO_REFEICAO LIKE '%MARMITEX%' OR TIPO_REFEICAO LIKE '%MARMITA%')
-                  AND (AFERIU_TEMPERATURA IS NULL OR AFERIU_TEMPERATURA = '' OR AFERIU_TEMPERATURA = 'NÃO')
+                FROM PEDIDOS
+                WHERE (TIPO_REFEICAO LIKE '%%MARMITEX%%' OR TIPO_REFEICAO LIKE '%%MARMITA%%')
+                  AND (AFERIU_TEMPERATURA IS NULL OR AFERIU_TEMPERATURA = '' OR AFERIU_TEMPERATURA = 'NAO')
                   AND LIDER = %s
-                ORDER BY DATA_ENVIO1 DESC
+                  AND DATA_RETIRADA >= DATEADD(day, -7, GETDATE())
+                ORDER BY DATA_RETIRADA DESC
                 """
                 query_params_db = [equipe_param]
-                # Query para equipe específica
+                # Query para equipe específica - últimos 7 dias apenas
             else:
-                # Query sem filtro de equipe (comportamento original)
-                query = """
-                SELECT ID, DATA_RETIRADA, NOME_LIDER, TIPO_REFEICAO, FORNECEDOR, 
-                       TOTAL_COLABORADORES, TOTAL_PAGAR, DATA_ENVIO1, LIDER,
-                       TEMP_RETIRADA, TEMP_CONSUMO, AFERIU_TEMPERATURA
-                FROM PEDIDOS 
-                WHERE (TIPO_REFEICAO LIKE '%MARMITEX%' OR TIPO_REFEICAO LIKE '%MARMITA%')
-                  AND (AFERIU_TEMPERATURA IS NULL OR AFERIU_TEMPERATURA = '' OR AFERIU_TEMPERATURA = 'NÃO')
-                ORDER BY DATA_ENVIO1 DESC
-                """
+                # Sem equipe válida, não retornar nada para evitar carregar dados de todas as equipes
+                print("⚠️ Nenhuma equipe válida fornecida - retornando lista vazia")
+                query = None
                 query_params_db = []
-                # Query para todas as equipes
             
             try:
-                pedidos_pendentes = executar_query(query, query_params_db)
+                if query is None:
+                    pedidos_pendentes = []
+                else:
+                    pedidos_pendentes = executar_query(query, query_params_db)
                 print(f"📊 Query executada. Resultado: {type(pedidos_pendentes)}")
                 
                 if pedidos_pendentes is not None:
@@ -1150,28 +1164,47 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 
                 # Upload das imagens em background
                 import threading
-                
-                def upload_async():
-                    if img_retirada_base64:
-                        url_img_retirada = upload_imagem_blob(
-                            img_retirada_base64, 
-                            f"retirada_pedido_{pedido_id}.jpg"
-                        )
-                    
-                    if img_consumo_base64:
-                        url_img_consumo = upload_imagem_blob(
-                            img_consumo_base64, 
-                            f"consumo_pedido_{pedido_id}.jpg"
-                        )
-                    
-                    # Atualizar URLs no banco após upload
-                    if 'url_img_retirada' in locals() and 'url_img_consumo' in locals():
-                        query_img = "UPDATE PEDIDOS SET IMG_RETIRADA = %s, IMG_CONSUMO = %s WHERE ID = %s"
-                        executar_query(query_img, [url_img_retirada, url_img_consumo, pedido_id])
-                
-                # Iniciar upload em thread separada
+
+                def upload_async(pid, img_ret, img_con):
+                    url_ret = None
+                    url_con = None
+
+                    try:
+                        if img_ret:
+                            url_ret = upload_imagem_blob(img_ret, f"retirada_pedido_{pid}.jpg")
+                            print(f"📷 Upload retirada concluído: {url_ret[:80] if url_ret else 'FALHA'}...")
+
+                        if img_con:
+                            url_con = upload_imagem_blob(img_con, f"consumo_pedido_{pid}.jpg")
+                            print(f"📷 Upload consumo concluído: {url_con[:80] if url_con else 'FALHA'}...")
+
+                        # Atualizar URLs no banco - salvar cada uma independentemente
+                        updates = []
+                        params = []
+                        if url_ret and not url_ret.startswith('local_'):
+                            updates.append("IMG_RETIRADA = %s")
+                            params.append(url_ret)
+                        if url_con and not url_con.startswith('local_'):
+                            updates.append("IMG_CONSUMO = %s")
+                            params.append(url_con)
+
+                        if updates:
+                            params.append(pid)
+                            query_img = f"UPDATE PEDIDOS SET {', '.join(updates)} WHERE ID = %s"
+                            resultado_img = executar_query(query_img, params)
+                            print(f"✅ URLs das imagens salvas no banco para pedido {pid}: {resultado_img}")
+                        else:
+                            print(f"⚠️ Nenhuma URL válida para salvar no banco (pedido {pid})")
+
+                    except Exception as e:
+                        print(f"❌ Erro no upload assíncrono de imagens (pedido {pid}): {e}")
+
+                # Iniciar upload em thread separada - passar dados como argumentos
                 if img_retirada_base64 or img_consumo_base64:
-                    upload_thread = threading.Thread(target=upload_async)
+                    upload_thread = threading.Thread(
+                        target=upload_async,
+                        args=(pedido_id, img_retirada_base64, img_consumo_base64)
+                    )
                     upload_thread.daemon = True
                     upload_thread.start()
                 
@@ -1242,9 +1275,9 @@ def main():
     
     try:
         # Permitir reuso do endereço para evitar "Address already in use"
-        socketserver.TCPServer.allow_reuse_address = True
-        
-        with socketserver.TCPServer(("", port), RefeicaoHandler) as httpd:
+        socketserver.ThreadingTCPServer.allow_reuse_address = True
+
+        with socketserver.ThreadingTCPServer(("", port), RefeicaoHandler) as httpd:
             print(f"✅ Servidor escutando na porta {port}")
             sys.stdout.flush()
             try:
