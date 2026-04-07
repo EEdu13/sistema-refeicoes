@@ -3723,13 +3723,7 @@
                 img_retirada: imgRetirada,
                 img_consumo: imgConsumo,
                 observacoes: observacoesGerais,
-                aferiu_temperatura: "SIM", // IMPORTANTE: Marcar como aferido
-                AFERIU_TEMPERATURA: "SIM", // Backup caso a API espere maiúsculo
-                status_temperatura: "SIM", // Backup caso o campo tenha outro nome
-                temperatura_aferida: "SIM", // Mais uma variação
-                aferimento_concluido: "SIM", // Mais uma variação
-                status_aferimento: "SIM", // Mais uma variação
-                concluido: "SIM", // Variação simples
+                aferiu_temperatura: "SIM",
                 timestamp: new Date().toISOString()
             };
             
@@ -3766,16 +3760,7 @@
                     }
                     
                     // ✅ SUCESSO: Temperatura salva
-                    console.log('✅ Temperaturas salvas com múltiplos campos de status enviados');
-                    console.log('📤 Campos enviados para atualizar AFERIU_TEMPERATURA:');
-                    console.log('   - aferiu_temperatura: "SIM"');
-                    console.log('   - AFERIU_TEMPERATURA: "SIM"'); 
-                    console.log('   - status_temperatura: "SIM"');
-                    console.log('   - temperatura_aferida: "SIM"');
-                    console.log('   - aferimento_concluido: "SIM"');
-                    console.log('   - status_aferimento: "SIM"');
-                    console.log('   - concluido: "SIM"');
-                    console.log('💡 Se a pendência voltar, o backend deve processar um desses campos na API /api/afericao-temperatura');
+                    console.log('✅ Temperaturas salvas com sucesso');
                     
                     alert('✅ Aferição de temperatura salva com sucesso!\n' + 
                           `🌡️ Retirada: ${tempRetirada}°C\n` +
@@ -3928,14 +3913,14 @@
                     img.onload = function() {
                         // Configurar canvas
                         canvas.style.display = 'block';
-                        canvas.width = Math.min(img.width, 800);
+                        canvas.width = Math.min(img.width, 600);
                         canvas.height = (canvas.width / img.width) * img.height;
-                        
+
                         var ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        
-                        // SALVAR IMAGEM GLOBALMENTE
-                        globalImageRetirada = canvas.toDataURL('image/jpeg', 0.8);
+
+                        // SALVAR IMAGEM GLOBALMENTE (qualidade 0.5 para reduzir tamanho do payload)
+                        globalImageRetirada = canvas.toDataURL('image/jpeg', 0.5);
                         imageTimestamps.retirada = Date.now();
                         
                         console.log('💾 Imagem de RETIRADA salva:', globalImageRetirada.length, 'caracteres');
@@ -3991,14 +3976,14 @@
                     img.onload = function() {
                         // Configurar canvas
                         canvas.style.display = 'block';
-                        canvas.width = Math.min(img.width, 800);
+                        canvas.width = Math.min(img.width, 600);
                         canvas.height = (canvas.width / img.width) * img.height;
-                        
+
                         var ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        
-                        // SALVAR IMAGEM GLOBALMENTE
-                        globalImageConsumo = canvas.toDataURL('image/jpeg', 0.8);
+
+                        // SALVAR IMAGEM GLOBALMENTE (qualidade 0.5 para reduzir tamanho do payload)
+                        globalImageConsumo = canvas.toDataURL('image/jpeg', 0.5);
                         imageTimestamps.consumo = Date.now();
                         
                         console.log('💾 Imagem de CONSUMO salva:', globalImageConsumo.length, 'caracteres');

@@ -730,57 +730,83 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
         
         self.wfile.write(json.dumps(response, ensure_ascii=False, default=decimal_default).encode('utf-8'))
 
-    def do_POST(self):
-        # Parse da URL
-        parsed_path = urllib.parse.urlparse(self.path)
-        path = parsed_path.path
-        
-        # Headers CORS para APIs
+    def _read_full_body(self):
+        """Lê o corpo completo do POST de forma robusta (loop até receber tudo)"""
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length == 0:
+            return b''
+
+        body = b''
+        remaining = content_length
+        while remaining > 0:
+            chunk = self.rfile.read(min(remaining, 65536))
+            if not chunk:
+                break
+            body += chunk
+            remaining -= len(chunk)
+
+        if len(body) != content_length:
+            print(f"⚠️ Body incompleto: esperado {content_length} bytes, recebido {len(body)} bytes")
+
+        return body
+
+    def _send_json_headers(self):
+        """Envia headers padrão para resposta JSON"""
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
+
+    def do_POST(self):
+        # Parse da URL
+        parsed_path = urllib.parse.urlparse(self.path)
+        path = parsed_path.path
+
+        # Ler body ANTES de enviar response headers (evita truncamento)
+        try:
+            post_body = self._read_full_body()
+        except Exception as e:
+            print(f"❌ Erro ao ler body do POST {path}: {e}")
+            self._send_json_headers()
+            response = {"error": True, "message": f"Erro ao ler dados: {str(e)}"}
+            self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+            return
+
+        # Agora enviar headers
+        self._send_json_headers()
         
         if path == '/api/salvar-pedido':
-            # Ler dados do POST com validação
+            # Usar body já lido
             try:
-                content_length = int(self.headers.get('Content-Length', 0))
-                print(f"📏 Content-Length: {content_length}")
-                
-                if content_length == 0:
-                    print("❌ Erro: Content-Length é 0")
+                print(f"📏 Body recebido: {len(post_body)} bytes")
+
+                if len(post_body) == 0:
+                    print("❌ Erro: Body está vazio")
                     response = {"error": True, "message": "Dados vazios recebidos"}
                     self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
                     return
-                
-                post_data = self.rfile.read(content_length)
-                print(f"📦 Dados brutos recebidos ({len(post_data)} bytes): {post_data[:200]}...")
-                
-                if not post_data:
-                    print("❌ Erro: post_data está vazio")
-                    response = {"error": True, "message": "Nenhum dado recebido"}
-                    self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
-                    return
-                
+
+                print(f"📦 Dados brutos recebidos ({len(post_body)} bytes): {post_body[:200]}...")
+
                 # Decodificar dados
-                post_data_str = post_data.decode('utf-8')
+                post_data_str = post_body.decode('utf-8')
                 print(f"📝 String decodificada: {post_data_str[:200]}...")
-                
+
                 if not post_data_str.strip():
                     print("❌ Erro: String decodificada está vazia")
                     response = {"error": True, "message": "Dados decodificados estão vazios"}
                     self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
                     return
-                
+
                 # Parse JSON
                 pedido_data = json.loads(post_data_str)
                 print(f"✅ JSON parsed com sucesso")
                 
             except json.JSONDecodeError as e:
                 print(f"❌ Erro ao fazer parse do JSON: {e}")
-                print(f"❌ Dados problemáticos: {post_data}")
+                print(f"❌ Dados problemáticos: {post_body[:500]}")
                 response = {"error": True, "message": f"Erro no formato JSON: {str(e)}"}
                 self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
                 return
@@ -984,9 +1010,8 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 # Ler o conteúdo como multipart/form-data manualmente
                 import tempfile
                 
-                # Ler todos os dados do request
-                content_length = int(self.headers.get('Content-Length', 0))
-                raw_data = self.rfile.read(content_length)
+                # Usar body já lido
+                raw_data = post_body
                 
                 # Procurar pelo boundary no Content-Type
                 content_type = self.headers.get('Content-Type', '')
@@ -1066,9 +1091,8 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
         elif path == '/api/aferição-temperatura' or path == '/api/afericao-temperatura':
             # Endpoint para aferição de temperatura com imagens (suporte a URLs com e sem acentos)
             try:
-                content_length = int(self.headers['Content-Length'])
-                post_data = self.rfile.read(content_length)
-                aferição_data = json.loads(post_data.decode('utf-8'))
+                print(f"📏 Afericao body: {len(post_body)} bytes")
+                aferição_data = json.loads(post_body.decode('utf-8'))
                 
                 pedido_id = aferição_data['pedido_id']
                 temperatura_retirada = aferição_data['temperatura_retirada']
@@ -1230,6 +1254,13 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                         "message": f"❌ Erro ao salvar temperaturas no banco (ID {pedido_id})"
                     }
                     
+            except json.JSONDecodeError as e:
+                print(f"❌ Erro JSON na aferição: {e}")
+                print(f"❌ Body recebido: {len(post_body)} bytes, primeiros 300: {post_body[:300]}")
+                response = {
+                    "error": True,
+                    "message": f"Erro no formato JSON da aferição: {str(e)}"
+                }
             except Exception as e:
                 print(f"❌ Erro ao processar aferição: {e}")
                 response = {
