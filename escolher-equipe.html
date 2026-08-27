@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0F251D">
+    <title>Escolher equipe - Refeições Larsil</title>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icone-32.png">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/icone-64.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/icone-180.png">
+    <link rel="manifest" href="/manifest.json">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/theme.css">
+    <link rel="stylesheet" href="/assets/login.css">
+    <script src="/assets/session.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--lar-bg-1);
+            color: var(--lar-text);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Cabeçalho com a foto de quem está logado */
+        .quem {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            margin-bottom: 1.4rem;
+            border-radius: var(--raio-md);
+            background: var(--lar-surface-2);
+            border: 1px solid var(--lar-line);
+        }
+        .quem-texto { min-width: 0; flex: 1; }
+        .quem-nome {
+            font-size: 13.5px; font-weight: 700; color: var(--lar-text);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .quem-login { font-size: 11px; color: var(--lar-soft); margin-top: 1px; }
+    </style>
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-card">
+            <img src="/assets/larsil-logo.png" alt="Larsil Serviços Florestais" class="login-logo">
+            <p class="login-eyebrow">Escolha a equipe</p>
+
+            <div class="quem" id="quem"></div>
+
+            <p class="login-intro" id="intro">
+                Você tem mais de uma equipe liberada. Os pedidos, colaboradores e
+                pendências de temperatura são desta equipe.
+            </p>
+
+            <div class="equipe-lista lar-cascata" id="lista"></div>
+
+            <div id="erroBox" class="login-error" style="display: none;"></div>
+
+            <div class="login-extra">
+                <button type="button" class="login-extra-btn" id="btnSair">🚪 Sair desta conta</button>
+            </div>
+
+            <div class="login-footer">Larsil Serviços Florestais</div>
+        </div>
+    </div>
+
+    <script>
+        // Sem sessão não há escopo para escolher
+        if (!SESSION.sessaoUsavel()) window.location.replace('/login.html');
+
+        const lista = document.getElementById('lista');
+        const intro = document.getElementById('intro');
+        const erroBox = document.getElementById('erroBox');
+        const usuario = SESSION.getUsuario() || {};
+
+        // ==========================================
+        // QUEM ESTÁ ENTRANDO — com a foto resolvida pelo PCP
+        // ==========================================
+        SESSION.carregarConfig().then(() => {
+            const quem = document.getElementById('quem');
+            quem.replaceChildren();
+
+            quem.appendChild(SESSION.avatar(usuario.nome || usuario.login, { size: 40, clicavel: false }));
+
+            const texto = document.createElement('div');
+            texto.className = 'quem-texto';
+
+            const nome = document.createElement('div');
+            nome.className = 'quem-nome';
+            nome.textContent = usuario.nome || usuario.login || 'Usuário';
+
+            const login = document.createElement('div');
+            login.className = 'quem-login';
+            login.textContent = usuario.login || '';
+
+            texto.append(nome, login);
+            quem.appendChild(texto);
+        });
+
+        // ==========================================
+        // EQUIPES DO ESCOPO
+        // ==========================================
+        function escolher(equipe) {
+            SESSION.setEquipe(equipe);
+            window.location.href = '/sistema-pedidos.html';
+        }
+
+        function render() {
+            lista.replaceChildren();
+            const equipes = SESSION.equipesDisponiveis();
+
+            // Uma só: não faz sentido perguntar
+            if (equipes.length === 1 && !SESSION.verTudo()) {
+                escolher(equipes[0].valor);
+                return;
+            }
+
+            // Sem escopo nenhum: a TI ainda não liberou nada para esta pessoa
+            if (equipes.length === 0 && !SESSION.verTudo()) {
+                intro.textContent = 'Sua conta ainda não tem nenhuma equipe liberada no sistema de refeições.';
+                erroBox.textContent = 'Peça à TI para definir seu escopo no console da IAM '
+                    + '(EQUIPE, PROJETO, COORDENADOR ou SUPERVISOR). Sem isso não há o que exibir.';
+                erroBox.style.display = 'block';
+                return;
+            }
+
+            intro.textContent = equipes.length + ' equipes liberadas para você. '
+                + 'Pedidos, colaboradores e pendências de temperatura são da equipe escolhida.';
+
+            equipes.forEach(eq => {
+                const botao = document.createElement('button');
+                botao.type = 'button';
+                botao.className = 'equipe-opcao';
+
+                // Código à esquerda como âncora; o líder — que é o que a
+                // pessoa realmente reconhece — ocupa a linha e cede espaço
+                // com reticências quando o nome é longo.
+                const sigla = document.createElement('span');
+                sigla.className = 'equipe-opcao-sigla';
+                sigla.textContent = eq.valor;
+
+                const texto = document.createElement('span');
+                texto.className = 'equipe-opcao-texto';
+
+                const nome = document.createElement('span');
+                nome.className = 'equipe-opcao-nome';
+                nome.textContent = eq.lider || 'Sem líder no organograma';
+
+                const tipo = document.createElement('span');
+                tipo.className = 'equipe-opcao-tipo';
+                tipo.textContent = eq.projeto ? 'Projeto ' + eq.projeto : '';
+
+                texto.append(nome, tipo);
+
+                const seta = document.createElement('span');
+                seta.className = 'equipe-opcao-seta';
+                seta.textContent = '›';
+
+                botao.append(sigla, texto, seta);
+                botao.addEventListener('click', () => escolher(eq.valor));
+                lista.appendChild(botao);
+            });
+
+            // Quem vê tudo (admin/global) pode digitar qualquer equipe
+            if (SESSION.verTudo()) {
+                intro.textContent = 'Seu acesso é global. Escolha uma equipe da lista ou digite o código de outra.';
+
+                const campo = document.createElement('div');
+                campo.className = 'login-field';
+                campo.style.marginTop = '.6rem';
+
+                const label = document.createElement('label');
+                label.className = 'login-label';
+                label.setAttribute('for', 'equipeManual');
+                label.textContent = 'Outra equipe';
+
+                const linha = document.createElement('div');
+                linha.className = 'login-input-row';
+
+                const input = document.createElement('input');
+                input.id = 'equipeManual';
+                input.className = 'login-input';
+                input.placeholder = 'Ex: 700TA';
+                input.autocapitalize = 'characters';
+                input.spellcheck = false;
+                input.setAttribute('enterkeyhint', 'go');
+
+                const ir = document.createElement('button');
+                ir.type = 'button';
+                ir.className = 'lar-btn lar-btn-primario';
+                ir.textContent = 'Ir';
+                ir.style.flexShrink = '0';
+
+                function confirmar() {
+                    const v = input.value.trim().toUpperCase();
+                    if (!v) { input.focus(); return; }
+                    escolher(v);
+                }
+                ir.addEventListener('click', confirmar);
+                input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); confirmar(); } });
+
+                linha.append(input, ir);
+                campo.append(label, linha);
+                lista.after(campo);
+            }
+        }
+
+        // Pinta com o cache (funciona offline) e repinta quando o servidor
+        // devolver a lista atualizada.
+        render();
+        SESSION.carregarEquipes().then(render);
+
+        document.getElementById('btnSair').addEventListener('click', () => SESSION.logout());
+    </script>
+</body>
+</html>

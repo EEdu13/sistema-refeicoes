@@ -1,0 +1,3906 @@
+/* ==========================================================================
+   app.css — Estilos do Sistema de Refeições.
+
+   Antes isto eram 2.400 linhas dentro do sistema-pedidos.html. Saiu para cá
+   por dois motivos: o HTML tinha 352KB (o navegador rebaixava tudo junto) e
+   porque o visual passou a ser compartilhado com login.html / primeiro-acesso.
+
+   Tudo aqui herda os tokens de assets/theme.css. As classes mantêm os nomes
+   antigos de propósito: as telas internas continuam funcionando sem alteração
+   de markup e já nascem no tema novo.
+   ========================================================================== */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--lar-fundo);
+    background-attachment: fixed;
+    /* dvh e não vh: no celular, 100vh inclui a barra do navegador que está
+       escondida, e o final da página fica cortado atrás dela. */
+    min-height: 100dvh;
+    color: var(--lar-text);
+
+    /* PWA: nada de seleção acidental nem realce azul ao tocar */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: contain;
+}
+
+/* Campos precisam continuar selecionáveis, senão não dá para editar texto */
+input, textarea, select { -webkit-user-select: text; user-select: text; }
+
+.hidden { display: none !important; }
+
+.container {
+    max-width: 480px;
+    margin: 0 auto;
+    width: 100%;
+    min-height: 100dvh;
+    padding: calc(10px + env(safe-area-inset-top)) 12px calc(86px + env(safe-area-inset-bottom));
+}
+
+/* ==========================================================================
+   BARRA DE AÇÃO FIXA
+   O botão principal não pode depender de rolar até o fim: além de cortar no
+   rodapé, obriga a pessoa a procurar. Grudado embaixo, ele está sempre no
+   alcance do polegar e some do caminho do conteúdo com um degradê.
+   ========================================================================== */
+/* No fluxo, não flutuando.
+   Grudado embaixo, o botão pairava por cima do conteúdo e cobria justamente
+   os botões de câmera na hora de anexar a foto. Como cada fase agora cabe em
+   uma tela (abas Retirada/Consumo), ele não precisa perseguir a rolagem. */
+.acao-fixa {
+    margin-top: 24px;
+    padding-top: 18px;
+    border-top: 1px solid var(--lar-line);
+}
+.acao-fixa .btn { margin: 0; }
+
+/* Duas ações lado a lado, quando houver */
+.acao-fixa.dupla { display: flex; gap: 10px; }
+.acao-fixa.dupla .btn { flex: 1; }
+
+@media (max-width: 380px) {
+    .acao-fixa { margin-left: -10px; margin-right: -10px; padding-left: 10px; padding-right: 10px; }
+}
+
+/* ==========================================================================
+   TOPBAR — a faixa de vidro do sistema, igual à do Painel PCP
+   ========================================================================== */
+/* Só a identidade do sistema. O contexto de trabalho mora no rodapé. */
+.topbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 13px;
+    margin-bottom: 14px;
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    border-radius: 18px;
+    box-shadow: var(--sombra-card);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    position: sticky;
+    top: calc(6px + env(safe-area-inset-top));
+    z-index: 100;
+    animation: larSobe .4s var(--ease-suave) both;
+}
+
+.topbar-logo { height: 28px; width: auto; flex-shrink: 0; }
+
+.topbar-titulo {
+    flex: 1;
+    min-width: 0;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   FAIXA DE CONTEXTO (rodapé fixo)
+   Acompanha todas as telas: identidade, equipe ativa e estado da rede.
+   ========================================================================== */
+.barra-rodape {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0 auto;
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    max-width: 480px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: var(--lar-painel-translucido);
+    border-top: 1px solid var(--lar-line-forte);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 -14px 34px -18px rgba(0, 0, 0, .8);
+    animation: larSobe .4s var(--ease-suave) both;
+}
+
+.topbar-avatar { cursor: pointer; flex-shrink: 0; }
+/* Marca de um lado, identidade do outro; o titulo ocupa o vao. */
+.topbar .topbar-titulo { text-align: left; }
+
+/* A caixa é a referência de posição do dropdown e o que cede espaço */
+.topbar-equipe-caixa { position: relative; flex: 1; min-width: 0; }
+
+.topbar-equipe {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: rgba(111, 207, 123, 0.16);
+    border: 1px solid rgba(111, 207, 123, 0.45);
+    color: var(--lar-forte);
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background var(--t-rapida), transform .1s;
+}
+.topbar-equipe:hover { background: rgba(111, 207, 123, 0.26); }
+.topbar-equipe:active { transform: scale(.99); }
+
+.topbar-equipe-cod {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: .02em;
+    flex-shrink: 0;
+}
+
+/* O nome do líder é o que a pessoa reconhece, mas é o primeiro a ceder
+   espaço: min-width 0 + ellipsis garantem que ele nunca empurre nada. */
+.topbar-equipe-lider {
+    flex: 1;
+    min-width: 0;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #CFE0D4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.topbar-equipe-seta { font-size: 12px; opacity: .8; flex-shrink: 0; line-height: 1; }
+
+/* Uma equipe só: nada a trocar, some a seta e o toque */
+.topbar-equipe.fixa { cursor: default; }
+.topbar-equipe.fixa .topbar-equipe-seta { display: none; }
+
+/* --- Cabeçalho enxuto na tela de pendências ----------------------------
+   Ali a única coisa que ainda importa no topo é PARA QUAL EQUIPE o líder
+   está olhando. Marca, foto e estado de rede saem, e o calendário sobe. */
+body.tela-pendencias .topbar { display: none; }
+body.tela-pendencias .back-btn { margin-bottom: 10px; }
+
+/* ==========================================================================
+   ESTADO DE REDE
+   Sem crachá de "Online" ocupando espaço: o próprio app muda de cor. Verde =
+   conectado, cinza = offline. A palavra fica no cabeçalho, junto do pontinho.
+   ========================================================================== */
+.rede {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    color: var(--lar-forte);
+    font-size: 11.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    transition: color var(--t);
+}
+
+.rede-ponto {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--lar-green);
+    flex-shrink: 0;
+    /* Batimento: mostra que o app está vivo, sem piscar de forma agressiva */
+    animation: redePulso 2.4s ease-in-out infinite;
+}
+
+@keyframes redePulso {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(111, 207, 123, .55); }
+    70%      { box-shadow: 0 0 0 6px rgba(111, 207, 123, 0); }
+}
+
+.rede-texto { animation: larFadeIn .3s ease both; }
+
+/* --- OFFLINE: o app inteiro esfria para cinza ---------------------------
+   Redefinir os tokens no <body> repinta tudo de uma vez — botões, selos,
+   destaques — sem precisar de uma classe .offline em cada componente. */
+body.offline {
+    --lar-green: #8FA396;
+    --lar-green-escuro: #6E8577;
+    --lar-fundo: radial-gradient(1200px 800px at 15% -10%, #2A332E 0%, transparent 60%),
+                 linear-gradient(160deg, #171C19 0%, #1D2320 55%, #222926 100%);
+    --lar-surface: rgba(45, 54, 49, 0.55);
+}
+/* A transição precisa ser no elemento, não no token: variável não anima */
+body, .topbar, .menu-item, .lar-card, .btn { transition: background var(--t-lenta), border-color var(--t-lenta); }
+
+/* Sem conexão é um AVISO, não um estado neutro: o rodapé inteiro vira
+   âmbar em vez de ficar cinza discreto — senão passa despercebido bem na
+   hora em que a pessoa mais precisa saber que o pedido ficou na fila.
+
+   Os seletores aqui repetem ".barra-rodape" mesmo dentro de ".offline" só
+   para empatar em especificidade com as regras de "body.tema-claro
+   .barra-rodape .X" (tema.css) — sem isso elas sempre ganham por terem uma
+   classe a mais, e o texto branco pensado pro rodapé verde fica ilegível
+   em cima do amarelo. Em empate, quem carrega por último (app.css, depois
+   de theme.css) vence — por isso a ordem dos <link> no HTML importa aqui. */
+body.offline .barra-rodape {
+    background: rgba(232, 176, 75, 0.16);
+    border-top-color: rgba(232, 176, 75, 0.5);
+}
+body.offline .barra-rodape .topbar-equipe {
+    background: rgba(255, 255, 255, 0.75);
+    border-color: rgba(58, 42, 8, 0.25);
+    color: #3A2A08;
+}
+body.offline .barra-rodape .topbar-equipe-lider { color: rgba(58, 42, 8, 0.7); }
+body.offline .barra-rodape .rede {
+    color: #3A2A08;
+    background: var(--lar-amber);
+    padding: 5px 10px 5px 8px;
+    border-radius: 999px;
+}
+body.offline .barra-rodape .rede-ponto { background: #3A2A08; opacity: .55; animation: none; }
+
+/* --- Filas pendentes ---------------------------------------------------- */
+.fila-selo {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: rgba(232, 176, 75, 0.14);
+    border: 1px solid rgba(232, 176, 75, 0.32);
+    color: var(--lar-amber);
+    font-size: 10.5px;
+    font-weight: 700;
+    white-space: nowrap;
+    animation: larPulsa 2.4s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   TELAS
+   ========================================================================== */
+.main-screen, .login-screen {
+    animation: larSobe .32s var(--ease) both;
+}
+
+.back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 38px;
+    padding: 0 14px 0 10px;
+    margin-bottom: 16px;
+    border-radius: 10px;
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-muted);
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color var(--t-rapida), border-color var(--t-rapida), transform .1s;
+}
+.back-btn:hover { color: var(--lar-text); border-color: var(--lar-line-forte); }
+.back-btn:active { transform: translateX(-2px); }
+
+h2 {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    margin-bottom: 18px;
+    color: var(--lar-text);
+}
+
+h3 { font-size: 16px; font-weight: 700; color: var(--lar-text); }
+h4 { font-size: 14px; font-weight: 700; color: var(--lar-text); }
+
+/* ==========================================================================
+   MENU PRINCIPAL
+   Lista de ações, não um mural. Cada linha tem alvo de toque generoso —
+   é usado com uma mão só, em pé, muitas vezes com luva.
+   ========================================================================== */
+.menu {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    min-height: 78px;
+    padding: 14px 16px;
+    border-radius: var(--raio-lg);
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    box-shadow: var(--sombra-card);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: var(--lar-text);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    animation: larSobe .42s var(--ease-suave) both;
+}
+.menu-item:nth-child(1) { animation-delay: .04s; }
+.menu-item:nth-child(2) { animation-delay: .10s; }
+.menu-item:nth-child(3) { animation-delay: .16s; }
+.menu-item:nth-child(4) { animation-delay: .22s; }
+
+.menu-item:hover { border-color: rgba(111, 207, 123, 0.34); }
+.menu-item:active { transform: scale(.99); }
+
+.menu-icone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 54px; height: 54px;
+    flex-shrink: 0;
+    font-size: 26px;
+    border-radius: 13px;
+    background: rgba(111, 207, 123, 0.14);
+    border: 1px solid rgba(111, 207, 123, 0.28);
+}
+.menu-item.perigo .menu-icone {
+    background: rgba(220, 80, 70, 0.14);
+    border-color: rgba(220, 80, 70, 0.3);
+}
+
+/* Sao <span> no markup: sem display:block, titulo e subtitulo corriam na
+   mesma linha e a leitura virava uma frase so. */
+.menu-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.menu-titulo { display: block; font-size: 18px; font-weight: 700; letter-spacing: -.015em; line-height: 1.25; }
+.menu-sub { display: block; font-size: 14px; color: var(--lar-muted); line-height: 1.35; }
+
+.menu-seta { font-size: 19px; color: var(--lar-soft); flex-shrink: 0; transition: transform var(--t), color var(--t); }
+.menu-item:hover .menu-seta { color: var(--lar-green); transform: translateX(3px); }
+
+.menu-item.girando .menu-icone { animation: larGira 1s linear infinite; }
+.menu-item[disabled] { opacity: .5; cursor: default; }
+
+/* --- Item com pendências: precisa ser notado sem virar alarme ----------- */
+.menu-badge {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px; height: 32px;
+    padding: 0 10px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: var(--lar-amber);
+    color: #1A1206;
+    font-size: 15px;
+    font-weight: 800;
+}
+.menu-badge.tem { display: inline-flex; animation: badgePulsa 1.8s ease-in-out infinite; }
+
+@keyframes badgePulsa {
+    0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(232, 176, 75, .55); }
+    60%      { transform: scale(1.06); box-shadow: 0 0 0 8px rgba(232, 176, 75, 0); }
+}
+
+.menu-item.alerta {
+    border-color: rgba(232, 176, 75, 0.4);
+    animation: larSobe .42s var(--ease-suave) both, itemAlerta 2.6s ease-in-out infinite .5s;
+}
+.menu-item.alerta .menu-icone {
+    background: rgba(232, 176, 75, 0.16);
+    border-color: rgba(232, 176, 75, 0.34);
+}
+
+@keyframes itemAlerta {
+    0%, 100% { border-color: rgba(232, 176, 75, 0.32); }
+    50%      { border-color: rgba(232, 176, 75, 0.75); }
+}
+
+/* ==========================================================================
+   BOAS-VINDAS (legado — a tela inicial virou menu)
+   ========================================================================== */
+.welcome-section {
+    position: relative;
+    padding: 18px 16px;
+    margin-bottom: 20px;
+    border-radius: var(--raio-lg);
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    box-shadow: var(--sombra-card);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    animation: larSobe .4s var(--ease-suave) both;
+}
+.welcome-section h2 {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -.025em;
+    margin-bottom: 4px;
+    color: var(--lar-text);
+}
+.welcome-section p {
+    margin: 0;
+    color: var(--lar-muted);
+    font-size: 13.5px;
+    font-weight: 500;
+}
+
+.logout-btn {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    height: 34px;
+    padding: 0 13px;
+    border-radius: 10px;
+    background: rgba(220, 80, 70, 0.14);
+    border: 1px solid rgba(220, 80, 70, 0.3);
+    color: var(--lar-red-claro);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background var(--t-rapida), transform .1s;
+}
+.logout-btn:hover { background: rgba(220, 80, 70, 0.24); }
+.logout-btn:active { transform: scale(.97); }
+
+/* ==========================================================================
+   CARDS DE AÇÃO DA TELA PRINCIPAL
+   ========================================================================== */
+.main-buttons-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 26px;
+}
+
+.main-button-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    border-radius: var(--raio-lg);
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    box-shadow: var(--sombra-card);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: border-color var(--t), transform var(--t-rapida), box-shadow var(--t);
+    animation: larSobe .45s var(--ease-suave) both;
+}
+.main-button-card:nth-child(1) { animation-delay: .05s; }
+.main-button-card:nth-child(2) { animation-delay: .11s; }
+.main-button-card:nth-child(3) { animation-delay: .17s; }
+
+/* Brilho que atravessa o card no hover — o mesmo gesto do layout antigo,
+   agora em verde e bem mais discreto */
+.main-button-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(111, 207, 123, 0.09), transparent);
+    transition: left .55s var(--ease-suave);
+    pointer-events: none;
+}
+.main-button-card:hover::before { left: 100%; }
+
+.main-button-card:hover {
+    border-color: rgba(111, 207, 123, 0.34);
+    transform: translateY(-2px);
+    box-shadow: var(--sombra-flutuante);
+}
+.main-button-card:active { transform: translateY(0) scale(.995); }
+
+.button-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px; height: 50px;
+    flex-shrink: 0;
+    font-size: 24px;
+    border-radius: 14px;
+    background: rgba(111, 207, 123, 0.14);
+    border: 1px solid rgba(111, 207, 123, 0.28);
+}
+.main-button-card.update-card .button-icon {
+    background: rgba(90, 169, 230, 0.13);
+    border-color: rgba(90, 169, 230, 0.28);
+}
+.main-button-card.problem-card .button-icon {
+    background: rgba(220, 80, 70, 0.14);
+    border-color: rgba(220, 80, 70, 0.3);
+}
+
+.button-content { flex: 1; min-width: 0; text-align: left; }
+.button-content h3 {
+    margin: 0 0 3px 0;
+    font-size: 15.5px;
+    font-weight: 700;
+    letter-spacing: -.015em;
+    color: var(--lar-text);
+}
+.button-content p {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--lar-muted);
+    line-height: 1.4;
+}
+
+.button-arrow {
+    font-size: 19px;
+    color: var(--lar-soft);
+    flex-shrink: 0;
+    transition: color var(--t), transform var(--t);
+}
+.main-button-card:hover .button-arrow { color: var(--lar-green); transform: translateX(3px); }
+
+.main-button-card.disabled, .main-button-card:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+    transform: none !important;
+}
+.main-button-card.loading .button-icon { animation: larGira 1s linear infinite; }
+
+/* ==========================================================================
+   FORMULÁRIOS
+   ========================================================================== */
+.form-group { margin-bottom: 20px; }
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 13.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--lar-muted);
+}
+
+.form-control {
+    width: 100%;
+    min-height: var(--toque);
+    padding: 12px 14px;
+    border-radius: 11px;
+    background: var(--lar-surface-2);
+    border: 1px solid rgba(234, 241, 232, 0.18);
+    color: var(--lar-text);
+    /* 17px: legivel de longe. Nunca abaixo de 16, ou o iOS da zoom ao focar */
+    font-size: 17px;
+    font-family: inherit;
+    transition: border-color var(--t-rapida), background var(--t-rapida), box-shadow var(--t-rapida);
+}
+.form-control::placeholder { color: var(--lar-soft); }
+.form-control:focus {
+    outline: none;
+    border-color: var(--lar-green);
+    background: var(--lar-surface-3);
+    box-shadow: 0 0 0 3px rgba(111, 207, 123, 0.14);
+}
+.form-control[readonly] { background: rgba(10, 26, 20, 0.28); color: var(--lar-muted); cursor: default; }
+.form-control:disabled { opacity: .55; }
+
+textarea.form-control { min-height: 92px; line-height: 1.55; resize: vertical; }
+
+/* Campos de data/hora no tema escuro: sem isto o ícone nativo some no fundo */
+input[type="date"].form-control,
+input[type="time"].form-control { color-scheme: dark; }
+
+select.form-control {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 40px;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A9C1AC' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 13px center;
+    background-size: 18px;
+    line-height: 1.35;
+}
+select.form-control option {
+    background: var(--lar-bg-2);
+    color: var(--lar-text);
+    padding: 12px;
+}
+
+/* Dois campos curtos dividindo a linha. min-width:0 é o que permite o
+   input encolher dentro da coluna em vez de estourar a grade. */
+.linha-dupla {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.linha-dupla .form-group { min-width: 0; }
+.linha-dupla .form-control { min-width: 0; }
+
+/* Campo com um atalho ao lado (ex.: hora + "Agora") */
+.campo-com-acao { display: flex; gap: 8px; align-items: stretch; }
+.campo-com-acao .form-control { flex: 1; min-width: 0; }
+.campo-com-acao .btn {
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0 15px;
+    background: rgba(111, 207, 123, 0.13);
+    border-color: rgba(111, 207, 123, 0.3);
+    color: var(--lar-forte);
+    font-size: 14.5px;
+    font-weight: 700;
+}
+
+.text-muted {
+    display: block;
+    color: var(--lar-muted);
+    font-size: 13px;
+    line-height: 1.5;
+    margin-top: 7px;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 500;
+}
+
+/* Rádios e checkboxes acompanham o verde da marca */
+input[type="radio"], input[type="checkbox"] { accent-color: var(--lar-green); width: 18px; height: 18px; }
+
+/* ==========================================================================
+   BOTÕES
+   ========================================================================== */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: var(--toque);
+    padding: 13px 18px;
+    border-radius: var(--raio-md);
+    border: 1px solid var(--lar-line);
+    background: var(--lar-surface-2);
+    color: var(--lar-text);
+    font-family: inherit;
+    font-size: 16.5px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-bottom: 10px;
+    transition: background var(--t-rapida), border-color var(--t-rapida),
+                filter var(--t-rapida), transform .1s;
+}
+.btn:hover:not(:disabled) { border-color: var(--lar-line-forte); background: rgba(30, 70, 54, 0.7); }
+.btn:active:not(:disabled) { transform: scale(.985); }
+.btn:disabled { opacity: .5; cursor: default; }
+
+.btn-primary, .btn-success {
+    background: var(--lar-green);
+    border-color: var(--lar-green);
+    color: var(--lar-bg-1);
+    font-weight: 800;
+}
+.btn-primary:hover:not(:disabled), .btn-success:hover:not(:disabled) {
+    background: var(--lar-green);
+    filter: brightness(1.07);
+}
+
+.btn-warning {
+    background: rgba(232, 176, 75, 0.16);
+    border-color: rgba(232, 176, 75, 0.34);
+    color: var(--lar-amber);
+}
+
+.btn-danger, .btn-problem {
+    background: rgba(220, 80, 70, 0.18);
+    border-color: rgba(220, 80, 70, 0.36);
+    color: var(--lar-red-claro);
+}
+.btn-danger:hover:not(:disabled), .btn-problem:hover:not(:disabled) { background: rgba(220, 80, 70, 0.28); }
+
+.btn-secondary, .btn-outline-secondary { background: var(--lar-surface-2); color: var(--lar-muted); }
+
+.btn-outline-primary, .btn-outline-success {
+    background: transparent;
+    border-color: rgba(111, 207, 123, 0.45);
+    color: var(--lar-forte);
+}
+.btn-outline-primary:hover, .btn-outline-success:hover { background: rgba(111, 207, 123, 0.12); }
+
+.btn-sm {
+    width: auto;
+    min-height: 40px;
+    padding: 0 14px;
+    font-size: 13px;
+    margin: 0;
+}
+
+.btn-whatsapp {
+    width: auto;
+    background: #25D366;
+    border-color: #25D366;
+    color: #06331A;
+    font-weight: 800;
+    margin: 0;
+}
+.btn-whatsapp:hover { background: #25D366; filter: brightness(1.07); }
+
+/* ==========================================================================
+   REFEIÇÕES E FORNECEDORES
+   ========================================================================== */
+.meal-item {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.meal-button {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    min-height: 62px;
+    padding: 12px 16px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-text);
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background var(--t-rapida), border-color var(--t-rapida), transform .1s;
+}
+.meal-button:hover { border-color: rgba(111, 207, 123, 0.3); background: rgba(30, 70, 54, 0.6); }
+.meal-button:active { transform: scale(.99); }
+
+/* Selecionado: o verde da marca, não um gradiente novo */
+.meal-button.selected {
+    background: rgba(111, 207, 123, 0.15);
+    border-color: var(--lar-green);
+    box-shadow: 0 0 0 1px rgba(111, 207, 123, 0.25);
+}
+.meal-button.selected .meal-text { color: var(--lar-forte); }
+
+.meal-icon { font-size: 24px; flex-shrink: 0; line-height: 1; }
+.meal-text {
+    font-size: 16.5px;
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -.01em;
+}
+/* O markup traz <br> nos rótulos; na horizontal ele só atrapalha */
+.meal-text br { display: none; }
+
+.supplier-dropdown { width: 100%; animation: larSobe .28s var(--ease) both; }
+
+.supplier-row { display: flex; gap: 10px; align-items: flex-start; }
+.supplier-section { flex: 2.2; min-width: 0; }
+.price-section { flex: 1; min-width: 110px; display: none; }
+.price-section.show { display: flex; flex-direction: column; }
+
+.supplier-select, .supplier-input, .price-input {
+    width: 100%;
+    min-height: var(--toque);
+    padding: 12px 14px;
+    border-radius: 11px;
+    background: var(--lar-surface-2);
+    border: 1px solid rgba(234, 241, 232, 0.18);
+    color: var(--lar-text);
+    font-size: 16px;
+    font-family: inherit;
+    transition: border-color var(--t-rapida), box-shadow var(--t-rapida);
+}
+.supplier-select:focus, .supplier-input:focus, .price-input:focus {
+    outline: none;
+    border-color: var(--lar-green);
+    box-shadow: 0 0 0 3px rgba(111, 207, 123, 0.14);
+}
+.supplier-input::placeholder, .price-input::placeholder { color: var(--lar-soft); }
+.price-input { text-align: right; font-weight: 700; }
+
+/* ==========================================================================
+   COLABORADORES
+   ========================================================================== *
+
+.other-participant-item {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    animation: larSobe .25s var(--ease) both;
+}
+.other-participant-item input { flex: 1; margin: 0; }
+
+.remove-participant-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px; height: 36px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: rgba(220, 80, 70, 0.16);
+    border: 1px solid rgba(220, 80, 70, 0.3);
+    color: var(--lar-red-claro);
+    font-size: 14px;
+    cursor: pointer;
+    transition: background var(--t-rapida);
+}
+.remove-participant-btn:hover { background: rgba(220, 80, 70, 0.3); }
+
+#hotelFields {
+    padding: 14px;
+    margin-top: 10px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    border-left: 3px solid var(--lar-green);
+    animation: larSobe .28s var(--ease) both;
+}
+
+/* ==========================================================================
+   RESUMO DO PEDIDO
+   ========================================================================== */
+.summary {
+    padding: 16px;
+    margin-bottom: 20px;
+    border-radius: var(--raio-lg);
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    box-shadow: var(--sombra-card);
+    animation: larSobe .3s var(--ease) both;
+}
+.summary h3 { margin-bottom: 14px; font-size: 14px; }
+
+.summary-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    font-size: 15px;
+    color: var(--lar-muted);
+    line-height: 1.45;
+}
+.summary-line span:last-child { color: var(--lar-text); font-weight: 700; white-space: nowrap; }
+
+.summary-total {
+    border-top: 1px solid var(--lar-line-forte);
+    padding-top: 12px;
+    margin-top: 12px;
+}
+.summary-total .summary-line { margin: 0; font-size: 17px; color: var(--lar-text); font-weight: 700; }
+.summary-total .summary-line span:last-child { color: var(--lar-forte); font-size: 20px; font-weight: 800; }
+
+/* ==========================================================================
+   PENDÊNCIAS DE TEMPERATURA
+   ========================================================================== */
+.pending-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 15px;
+    margin: 16px 0 12px;
+    border-radius: var(--raio-md);
+    background: rgba(232, 176, 75, 0.1);
+    border: 1px solid rgba(232, 176, 75, 0.28);
+    border-left: 3px solid var(--lar-amber);
+}
+.pending-header h3 { font-size: 14px; color: var(--lar-amber); margin: 0; }
+
+.pending-count {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px; height: 26px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--lar-amber);
+    color: var(--lar-bg-1);
+    font-size: 12.5px;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+/* Piscar contínuo cansa quem olha a tela o dia todo — pulso suave basta */
+.blinking { animation: larPulsa 2.2s ease-in-out infinite; }
+
+/* Âmbar, não verde: o verde é a cor de "está tudo certo" no sistema inteiro.
+   Um item pendente precisa se separar do fundo à primeira olhada. */
+.pending-item {
+    padding: 14px;
+    margin-bottom: 9px;
+    border-radius: var(--raio-md);
+    background: rgba(232, 176, 75, 0.13);
+    border: 1px solid rgba(232, 176, 75, 0.38);
+    border-left: 3px solid var(--lar-amber);
+    cursor: pointer;
+    transition: border-color var(--t-rapida), transform var(--t-rapida), background var(--t-rapida);
+    animation: larSobe .35s var(--ease-suave) both;
+}
+.pending-item:hover {
+    background: rgba(232, 176, 75, 0.22);
+    border-color: var(--lar-amber);
+    transform: translateY(-1px);
+}
+.pending-item h4 { margin-bottom: 6px; font-size: 16px; color: #F5DFB0; }
+.pending-item p { margin: 0; font-size: 14px; color: rgba(240, 212, 154, .78); }
+
+/* Aferição salva no aparelho, ainda não sincronizada */
+.pending-sync {
+    border-color: rgba(90, 169, 230, 0.4) !important;
+    background: rgba(90, 169, 230, 0.08) !important;
+}
+
+/* ==========================================================================
+   CALENDÁRIO DE PENDÊNCIAS
+   O líder pensa por DIA ("faltou a de terça"), não por lista corrida. O mês
+   inteiro numa tela mostra de imediato onde estão os buracos.
+   ========================================================================== */
+.cal {
+    padding: 14px;
+    border-radius: var(--raio-lg);
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    box-shadow: var(--sombra-card);
+    margin-bottom: 16px;
+    animation: larSobe .35s var(--ease-suave) both;
+}
+
+.cal-topo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.cal-mes {
+    font-size: 16.5px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    text-transform: capitalize;
+}
+.cal-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px; height: 36px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-muted);
+    font-family: inherit;
+    font-size: 17px;
+    cursor: pointer;
+    transition: color var(--t-rapida), border-color var(--t-rapida);
+}
+.cal-nav:hover { color: var(--lar-text); border-color: var(--lar-line-forte); }
+
+.cal-grade { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+
+.cal-nome-dia {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--lar-soft);
+    padding-bottom: 6px;
+}
+
+.cal-dia {
+    position: relative;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--lar-muted);
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: default;
+    transition: background var(--t-rapida), border-color var(--t-rapida), transform .1s;
+}
+.cal-dia.vazio { visibility: hidden; }
+.cal-dia.fora { color: var(--lar-soft); opacity: .35; }
+
+/* Hoje: só uma marca de referência, sem competir com as pendências */
+.cal-dia.hoje { border-color: var(--lar-line-forte); color: var(--lar-text); }
+
+/* Dia com pendência: é o que a pessoa veio procurar */
+.cal-dia.tem {
+    background: rgba(232, 176, 75, 0.16);
+    border-color: rgba(232, 176, 75, 0.42);
+    color: #F0D49A;
+    font-weight: 800;
+    cursor: pointer;
+}
+.cal-dia.tem:hover { background: rgba(232, 176, 75, 0.3); transform: scale(1.05); }
+.cal-dia.tem:active { transform: scale(.97); }
+
+.cal-dia.selecionado {
+    background: var(--lar-amber);
+    border-color: var(--lar-amber);
+    color: #1A1206;
+}
+
+/* Quantas pendências naquele dia */
+.cal-contador {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 3px;
+    border-radius: 999px;
+    background: var(--lar-red);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+.cal-dia.selecionado .cal-contador { background: var(--lar-bg-1); }
+
+.cal-legenda {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    justify-content: center;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--lar-line);
+    font-size: 12px;
+    color: var(--lar-muted);
+    font-weight: 600;
+}
+.cal-legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.cal-legenda i {
+    width: 11px; height: 11px;
+    border-radius: 3px;
+    display: inline-block;
+}
+.cal-legenda i.tem { background: rgba(232, 176, 75, .5); border: 1px solid rgba(232,176,75,.6); }
+.cal-legenda i.hoje { border: 1px solid var(--lar-line-forte); }
+
+/* Vazio: dizer que está tudo em dia é informação, não ausência dela */
+.cal-vazio {
+    text-align: center;
+    padding: 30px 20px;
+    color: var(--lar-muted);
+    animation: larSobe .3s var(--ease) both;
+}
+.cal-vazio .emoji { font-size: 38px; display: block; margin-bottom: 10px; }
+.cal-vazio p { font-size: 14px; font-weight: 600; color: var(--lar-text); margin-bottom: 4px; }
+.cal-vazio small { font-size: 12px; color: var(--lar-soft); }
+
+.dia-titulo {
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--lar-muted);
+    margin-bottom: 10px;
+}
+
+/* ==========================================================================
+   AFERIÇÃO DE TEMPERATURA
+   ========================================================================== */
+.temp-info {
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    border-left: 3px solid var(--lar-green);
+}
+.temp-info h3 { color: var(--lar-text); font-size: 16px; }
+
+/* --- ABAS RETIRADA | CONSUMO -------------------------------------------
+   Antes as duas fases ficavam empilhadas: a pessoa preenchia a de cima,
+   rolava, perdia o contexto e às vezes digitava a temperatura no campo
+   errado. Uma fase por vez elimina a rolagem e o erro junto. */
+.temp-abas {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 5px;
+    margin-bottom: 16px;
+    border-radius: 14px;
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+}
+
+.temp-aba {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 52px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--lar-muted);
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background var(--t-rapida), color var(--t-rapida);
+}
+.temp-aba.ativa { background: var(--lar-green); color: var(--lar-bg-1); font-weight: 800; }
+
+/* Aba cobrada: pisca em âmbar para dizer "é aqui que falta".
+   Some sozinha assim que a pessoa começa a preencher. */
+.temp-aba.cobrando { animation: abaCobra 1s ease-in-out 3; }
+
+@keyframes abaCobra {
+    0%, 100% { background: var(--lar-amber); color: #1A1206; }
+    50%      { background: rgba(232, 176, 75, .2); color: var(--lar-amber); }
+}
+
+/* Campo que faltou preencher */
+.form-control.faltando {
+    border-color: var(--lar-amber);
+    box-shadow: 0 0 0 3px rgba(232, 176, 75, 0.18);
+}
+.file-preview.faltando {
+    border-color: var(--lar-amber);
+    border-style: solid;
+    color: var(--lar-amber);
+}
+
+/* Bolinha de "essa fase está completa" */
+.temp-aba-ok {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity var(--t);
+}
+.temp-aba.completa .temp-aba-ok { opacity: 1; }
+
+.temp-painel { display: none; }
+.temp-painel.ativo { display: block; animation: larSobe .28s var(--ease) both; }
+
+/* Compat: markup antigo que ainda usa estes nomes */
+.temp-phases-container { display: block; }
+.temp-phase-card { margin-bottom: 14px; }
+
+.temp-textarea { min-height: 84px; resize: vertical; }
+
+.observations-section {
+    padding: 16px;
+    margin-top: 22px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+}
+
+/* --- Fotos ------------------------------------------------------------- */
+.photo-options { display: flex; gap: 9px; margin-bottom: 10px; }
+.photo-options .btn { flex: 1; margin-bottom: 0; font-size: 13px; padding: 12px 10px; }
+
+.file-preview {
+    min-height: 46px;
+    padding: 12px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px dashed var(--lar-line-forte);
+    color: var(--lar-muted);
+    font-size: 14px;
+    text-align: center;
+    transition: border-color var(--t), background var(--t);
+}
+.file-preview.has-file, .file-preview.has-image {
+    border-style: solid;
+    border-color: rgba(111, 207, 123, 0.5);
+    background: rgba(111, 207, 123, 0.12);
+    color: var(--lar-forte);
+    animation: larSobe .3s var(--ease) both;
+}
+.file-preview canvas, .file-preview img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--raio-md);
+    margin-top: 10px;
+    box-shadow: 0 8px 24px -8px rgba(0, 0, 0, .6);
+}
+
+.foto-container { display: flex; gap: 10px; margin-top: 10px; }
+
+.foto-area, .photo-upload-area {
+    flex: 1;
+    min-height: 118px;
+    padding: 18px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px dashed var(--lar-line-forte);
+    color: var(--lar-muted);
+    text-align: center;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: border-color var(--t-rapida), background var(--t-rapida);
+}
+.foto-area:hover, .photo-upload-area:hover {
+    border-color: var(--lar-green);
+    background: rgba(111, 207, 123, 0.08);
+}
+.foto-area div, .photo-upload-text { color: var(--lar-muted); font-size: 12.5px; }
+.foto-area img, .photo-upload-area img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: var(--raio-sm);
+}
+
+/* ==========================================================================
+   POPUPS
+   ========================================================================== */
+.popup-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: var(--lar-veu);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    animation: larFadeIn .2s ease-out both;
+    overflow-y: auto;
+}
+
+.popup-content {
+    width: 100%;
+    max-width: 420px;
+    max-height: 92vh;
+    overflow-y: auto;
+    border-radius: var(--raio-xl);
+    background: var(--lar-painel);
+    border: 1px solid var(--lar-line-forte);
+    box-shadow: var(--sombra-flutuante);
+    animation: larCardIn .3s var(--ease) both;
+}
+
+.popup-header {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--lar-line);
+    background: rgba(111, 207, 123, 0.1);
+    border-radius: var(--raio-xl) var(--raio-xl) 0 0;
+    text-align: center;
+}
+.popup-header h3 { margin: 0; font-size: 17px; color: var(--lar-text); }
+
+/* Popup de problema: a cor conta a história antes do texto */
+#problemPopup .popup-header { background: rgba(220, 80, 70, 0.14); }
+#problemPopup .popup-header h3 { color: var(--lar-red-claro); }
+
+.popup-body { padding: 20px; text-align: center; }
+.popup-body p { margin: 9px 0; color: var(--lar-muted); font-size: 13.5px; line-height: 1.55; }
+.popup-body label { color: var(--lar-muted) !important; font-size: 11.5px; font-weight: 700 !important; }
+.popup-body input, .popup-body select, .popup-body textarea {
+    background: var(--lar-surface-2) !important;
+    border: 1px solid rgba(234, 241, 232, 0.18) !important;
+    border-radius: 10px !important;
+    color: var(--lar-text) !important;
+    font-family: inherit !important;
+    font-size: 16px !important;
+    padding: 12px 14px !important;
+    color-scheme: dark;
+}
+.popup-body input:focus, .popup-body select:focus, .popup-body textarea:focus {
+    outline: none;
+    border-color: var(--lar-green) !important;
+}
+.popup-body button[onclick*="foto"] {
+    background: var(--lar-surface-2) !important;
+    border: 1px dashed var(--lar-line-forte) !important;
+    border-radius: var(--raio-md) !important;
+    color: var(--lar-muted) !important;
+    font-family: inherit !important;
+}
+
+.popup-actions {
+    display: flex;
+    gap: 10px;
+    padding: 0 20px 20px;
+}
+.popup-actions .btn { flex: 1; margin: 0; }
+
+/* ==========================================================================
+   FOLHA (bottom sheet)
+   No celular, um modal centralizado fica espremido entre o teclado e o topo.
+   Subindo de baixo, o conteúdo nasce perto do polegar e pode ocupar a altura
+   que precisar.
+   ========================================================================== */
+.folha {
+    position: fixed;
+    inset: 0;
+    z-index: 2500;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(2, 12, 8, 0.75);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    animation: larFadeIn .2s ease-out both;
+}
+.folha.hidden { display: none; }
+
+.folha-conteudo {
+    width: 100%;
+    max-width: 520px;
+    max-height: 92dvh;
+    display: flex;
+    flex-direction: column;
+    background: var(--lar-painel);
+    border: 1px solid var(--lar-line-forte);
+    border-bottom: none;
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -20px 60px -20px rgba(0, 0, 0, .7);
+    animation: folhaSobe .32s var(--ease) both;
+}
+
+@keyframes folhaSobe {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+}
+
+/* Puxador: sinaliza "isso é uma folha", como no resto do sistema operacional */
+.folha-puxador {
+    width: 38px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--lar-line-forte);
+    margin: 10px auto 0;
+    flex-shrink: 0;
+}
+
+.folha-topo {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 14px 18px 12px;
+    border-bottom: 1px solid var(--lar-line);
+    flex-shrink: 0;
+}
+.folha-icone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px; height: 38px;
+    flex-shrink: 0;
+    border-radius: 11px;
+    font-size: 18px;
+    background: rgba(220, 80, 70, 0.16);
+    border: 1px solid rgba(220, 80, 70, 0.32);
+}
+.folha-titulo { flex: 1; min-width: 0; }
+.folha-titulo strong { display: block; font-size: 17px; font-weight: 700; letter-spacing: -.015em; }
+.folha-titulo span { display: block; font-size: 13px; color: var(--lar-muted); margin-top: 1px; }
+
+.folha-fechar {
+    width: 34px; height: 34px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-muted);
+    font-size: 17px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: color var(--t-rapida);
+}
+.folha-fechar:hover { color: var(--lar-text); }
+
+/* Só o miolo rola: topo e rodapé ficam sempre visíveis */
+.folha-corpo {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 18px;
+}
+
+.folha-rodape {
+    display: flex;
+    gap: 10px;
+    padding: 14px 18px calc(16px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--lar-line);
+    background: rgba(10, 26, 20, 0.4);
+    flex-shrink: 0;
+}
+.folha-rodape .btn { margin: 0; }
+.folha-rodape .btn-principal { flex: 2; }
+.folha-rodape .btn-cancelar { flex: 1; }
+
+/* ==========================================================================
+   SELETOR EM LISTA (no lugar do <select> nativo)
+   O select nativo abre uma roleta do sistema que corta nomes longos de
+   fornecedor e não deixa buscar. Com 30+ fornecedores isso vira rolagem cega.
+   ========================================================================== */
+.seletor {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: var(--toque);
+    padding: 12px 14px;
+    border-radius: 11px;
+    background: var(--lar-surface-2);
+    border: 1px solid rgba(234, 241, 232, 0.18);
+    color: var(--lar-text);
+    font-family: inherit;
+    font-size: 16.5px;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color var(--t-rapida);
+}
+.seletor:hover { border-color: rgba(111, 207, 123, .34); }
+.seletor.vazio { color: var(--lar-soft); }
+.seletor-valor { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seletor-seta { color: var(--lar-soft); font-size: 12px; flex-shrink: 0; }
+
+.picker-busca { margin-bottom: 12px; }
+
+.picker-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 52dvh;
+    overflow-y: auto;
+}
+
+.picker-opcao {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    min-height: 52px;
+    padding: 11px 13px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-text);
+    font-family: inherit;
+    font-size: 16px;
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--t-rapida), border-color var(--t-rapida);
+}
+.picker-opcao:hover { background: rgba(111, 207, 123, .1); border-color: rgba(111, 207, 123, .3); }
+.picker-opcao.marcada { border-color: var(--lar-green); background: rgba(111, 207, 123, .14); }
+.picker-opcao-nome { flex: 1; min-width: 0; line-height: 1.3; }
+.picker-opcao-check { color: var(--lar-green); font-size: 15px; flex-shrink: 0; opacity: 0; }
+.picker-opcao.marcada .picker-opcao-check { opacity: 1; }
+
+.picker-vazio { text-align: center; padding: 26px 16px; color: var(--lar-soft); font-size: 13px; }
+
+/* ==========================================================================
+   CHIPS — atalhos do que aconteceu
+   Digitar de luva, no sol, é o que faz a pessoa desistir de reportar.
+   ========================================================================== */
+/* Grade 2x2 em vez de flex-wrap: com rótulos de larguras diferentes o wrap
+   deixava um atalho sozinho em cada linha, ocupando três linhas para quatro
+   opções. Colunas iguais fecham em duas linhas, sempre. */
+.chips {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.chip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 54px;
+    padding: 8px 10px;
+    border-radius: 14px;
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-text);
+    font-family: inherit;
+    font-size: 14.5px;
+    font-weight: 600;
+    line-height: 1.25;
+    cursor: pointer;
+    transition: background var(--t-rapida), border-color var(--t-rapida), color var(--t-rapida);
+}
+.chip:hover { border-color: var(--lar-line-forte); color: var(--lar-text); }
+.chip.marcado {
+    background: rgba(220, 80, 70, .16);
+    border-color: rgba(220, 80, 70, .4);
+    color: var(--lar-red-claro);
+    font-weight: 700;
+}
+
+/* ==========================================================================
+   SLOTS DE FOTO
+   ========================================================================== */
+.fotos-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.foto-slot {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px dashed var(--lar-line-forte);
+    color: var(--lar-muted);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color var(--t-rapida), background var(--t-rapida);
+}
+.foto-slot:hover { border-color: var(--lar-green); background: rgba(111, 207, 123, .08); }
+.foto-slot-icone { font-size: 22px; }
+
+.foto-slot.tem { border-style: solid; border-color: rgba(111, 207, 123, .4); padding: 0; }
+.foto-slot.tem img { width: 100%; height: 100%; object-fit: cover; }
+
+.foto-slot-remover {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: rgba(2, 12, 8, .8);
+    border: 1px solid var(--lar-line-forte);
+    color: var(--lar-text);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+.foto-slot.tem .foto-slot-remover { display: flex; }
+
+/* ==========================================================================
+   OVERLAY DE CARREGAMENTO
+   ========================================================================== */
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 4500;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: var(--lar-veu);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}
+
+.loading-content {
+    width: 100%;
+    max-width: 300px;
+    padding: 34px 28px;
+    border-radius: var(--raio-xl);
+    background: var(--lar-painel);
+    border: 1px solid var(--lar-line-forte);
+    box-shadow: var(--sombra-flutuante);
+    text-align: center;
+    animation: larCardIn .28s var(--ease) both;
+}
+
+.loading-spinner {
+    width: 44px; height: 44px;
+    margin: 0 auto 18px;
+    border: 3px solid rgba(234, 241, 232, 0.14);
+    border-top-color: var(--lar-green);
+    border-radius: 50%;
+    animation: larGira .8s linear infinite;
+}
+
+.loading-text { font-size: 16px; font-weight: 700; color: var(--lar-text); margin-bottom: 7px; }
+.loading-subtitle { font-size: 12.5px; color: var(--lar-muted); margin: 0; line-height: 1.5; }
+
+/* ==========================================================================
+   RESPONSIVO
+   ========================================================================== */
+@media (min-width: 600px) {
+    .container { max-width: 560px; padding-left: 18px; padding-right: 18px; }
+    .main-buttons-grid { grid-template-columns: 1fr 1fr; }
+    .main-button-card:first-child { grid-column: 1 / -1; }
+}
+
+@media (min-width: 900px) {
+    .container { max-width: 720px; }
+    .main-buttons-grid { grid-template-columns: repeat(3, 1fr); }
+    .main-button-card:first-child { grid-column: auto; }
+}
+
+@media (max-width: 380px) {
+    .container { padding-left: 10px; padding-right: 10px; }
+    .supplier-row { flex-direction: column; }
+    .price-section { min-width: 0; }
+    .topbar-sub { display: none; }
+}
+
+/* ==========================================================================
+   HORÁRIOS SUGERIDOS
+   A roleta nativa de hora é lenta e, no formato 12h, exige acertar o AM/PM —
+   é onde o campo ficava vazio sem a pessoa perceber. Os horários que mais
+   aparecem resolvem em um toque; a roleta continua ali para o resto.
+   ========================================================================== */
+/* Grade de partes iguais em vez de flex-wrap: garante UMA linha, com os
+   cinco atalhos dividindo a largura, em qualquer tamanho de tela. */
+.horas-sugeridas {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+}
+
+.hora-sugerida {
+    min-height: 46px;
+    padding: 0 4px;
+    border-radius: 10px;
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line-forte);
+    color: var(--lar-forte);
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--t-rapida), border-color var(--t-rapida), transform .1s;
+}
+
+/* "Agora" é ação, não horário fixo — some do resto por ser verde */
+.hora-agora {
+    background: rgba(111, 207, 123, .15);
+    border-color: rgba(111, 207, 123, .45);
+}
+.hora-sugerida:hover { background: rgba(111, 207, 123, .16); border-color: rgba(111, 207, 123, .45); }
+.hora-sugerida:active { transform: scale(.97); }
+
+.hora-sugerida.ativa {
+    background: var(--lar-green);
+    border-color: var(--lar-green);
+    color: var(--lar-bg-1);
+    font-weight: 800;
+}
+
+/* Cadastrar fornecedor novo: separado da lista, para não parecer um deles */
+.picker-opcao-outro {
+    margin-top: 8px;
+    border-style: dashed;
+    border-color: rgba(111, 207, 123, .4);
+    color: var(--lar-forte);
+}
+
+/* ==========================================================================
+   PLACEHOLDER NUNCA PODE PARECER VALOR
+   Um "65" cinza dentro do campo de temperatura foi lido como já preenchido, e
+   a pessoa achou que a validação apontava a fase errada. Placeholder agora é
+   itálico, mais apagado e menor que o texto digitado — some a ambiguidade.
+   ========================================================================== */
+.form-control::placeholder,
+.lar-input::placeholder,
+.supplier-input::placeholder,
+.price-input::placeholder {
+    color: rgba(169, 193, 172, .55);
+    font-style: italic;
+    font-size: 15px;
+    font-weight: 400;
+    opacity: 1;   /* Firefox aplica opacidade própria no placeholder */
+}
+
+/* Valor realmente digitado: claro e firme */
+.form-control:not(:placeholder-shown) {
+    color: var(--lar-forte);
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   DROPDOWN DE EQUIPE
+   Trocar de equipe é escolha rápida e frequente — não merece sair da tela e
+   voltar. Ancorado na própria pílula do rodapé, mantém o contexto: na tela de
+   pendências o calendário continua atrás e se repinta na troca.
+   Abre para CIMA, porque a pílula vive embaixo.
+   ========================================================================== */
+.equipe-dropdown {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    z-index: 600;
+    padding: 6px;
+    border-radius: var(--raio-lg);
+    background: var(--lar-painel);
+    border: 1px solid var(--lar-line-forte);
+    box-shadow: 0 -18px 50px -12px rgba(0, 0, 0, .8);
+    max-height: min(56dvh, 420px);
+    overflow-y: auto;
+    animation: dropAbre .18s var(--ease) both;
+    transform-origin: bottom center;
+}
+.equipe-dropdown.hidden { display: none; }
+
+@keyframes dropAbre {
+    from { opacity: 0; transform: translateY(8px) scale(.98); }
+    to   { opacity: 1; transform: none; }
+}
+
+.equipe-dropdown-titulo {
+    padding: 8px 10px 9px;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--lar-muted);
+}
+
+/* Linha compacta: código em destaque, líder em seguida, projeto à direita.
+   Cabem 6 equipes sem rolar — a versão em cartão só cabia 3. */
+.equipe-linha {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    min-height: 54px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: transparent;
+    border: none;
+    color: var(--lar-text);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--t-rapida);
+}
+.equipe-linha:hover { background: rgba(111, 207, 123, .12); }
+.equipe-linha.ativa { background: rgba(111, 207, 123, .18); }
+
+.equipe-linha-cod {
+    flex-shrink: 0;
+    min-width: 62px;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: .02em;
+    color: var(--lar-forte);
+}
+
+.equipe-linha-lider {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--lar-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.equipe-linha-proj {
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--lar-muted);
+}
+
+.equipe-linha-check { flex-shrink: 0; color: var(--lar-green); font-size: 15px; opacity: 0; }
+.equipe-linha.ativa .equipe-linha-check { opacity: 1; }
+
+/* Seta gira ao abrir */
+.topbar-equipe-seta { transition: transform var(--t-rapida); }
+.topbar-equipe.aberto .topbar-equipe-seta { transform: rotate(180deg); }
+
+/* ==========================================================================
+   GAVETA DE PERFIL
+   Entra deslizando pela direita. Substitui o prompt() do navegador, que além
+   de feio some no PWA instalado e obriga a pessoa a digitar um número para
+   escolher uma ação.
+   ========================================================================== */
+.gaveta {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: flex;
+    justify-content: flex-end;
+    background: var(--lar-veu);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    animation: larFadeIn .2s ease-out both;
+}
+.gaveta.hidden { display: none; }
+.gaveta.saindo { animation: larFadeOut .22s ease-in both; }
+
+.gaveta-painel {
+    width: min(340px, 88vw);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: var(--lar-painel);
+    border-left: 1px solid var(--lar-line-forte);
+    box-shadow: -24px 0 60px -20px rgba(0, 0, 0, .8);
+    animation: gavetaEntra .3s var(--ease) both;
+}
+.gaveta.saindo .gaveta-painel { animation: gavetaSai .24s ease-in both; }
+
+@keyframes gavetaEntra {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0); }
+}
+@keyframes gavetaSai {
+    from { transform: translateX(0); }
+    to   { transform: translateX(100%); }
+}
+
+/* --- Cabeçalho: quem é a pessoa ---------------------------------------- */
+.gaveta-topo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: calc(26px + env(safe-area-inset-top)) 20px 22px;
+    text-align: center;
+    border-bottom: 1px solid var(--lar-line);
+    background: linear-gradient(180deg, rgba(111, 207, 123, .1), transparent);
+    position: relative;
+}
+
+.gaveta-fechar {
+    position: absolute;
+    top: calc(14px + env(safe-area-inset-top));
+    right: 14px;
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-muted);
+    font-family: inherit;
+    font-size: 17px;
+    cursor: pointer;
+    transition: color var(--t-rapida);
+}
+.gaveta-fechar:hover { color: var(--lar-text); }
+
+.gaveta-nome {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    line-height: 1.25;
+    color: var(--lar-forte);
+}
+.gaveta-login { font-size: 13px; color: var(--lar-muted); }
+
+.gaveta-cargo {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+    padding: 5px 13px;
+    border-radius: 999px;
+    background: rgba(111, 207, 123, .16);
+    border: 1px solid rgba(111, 207, 123, .45);
+    color: var(--lar-forte);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+/* --- Miolo rolável ------------------------------------------------------ */
+.gaveta-corpo { flex: 1; min-height: 0; overflow-y: auto; padding: 18px; }
+
+.gaveta-secao {
+    font-size: 11.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--lar-soft);
+    margin-bottom: 10px;
+}
+.gaveta-secao:not(:first-child) { margin-top: 22px; }
+
+/* Projeto agrupando as equipes daquele projeto */
+.gaveta-projeto {
+    padding: 11px 13px;
+    margin-bottom: 8px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    animation: larSobe .35s var(--ease-suave) both;
+}
+.gaveta-projeto-nome {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    color: var(--lar-muted);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+.gaveta-equipes { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.gaveta-equipe {
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(234, 241, 232, .07);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-text);
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: .02em;
+}
+.gaveta-equipe.atual {
+    background: rgba(111, 207, 123, .2);
+    border-color: rgba(111, 207, 123, .55);
+    color: var(--lar-forte);
+}
+
+.gaveta-vazio { font-size: 13.5px; color: var(--lar-muted); line-height: 1.55; }
+
+/* --- Rodapé: sair ------------------------------------------------------- */
+.gaveta-rodape {
+    padding: 14px 18px calc(16px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--lar-line);
+    flex-shrink: 0;
+}
+.gaveta-rodape .btn { margin-bottom: 8px; }
+.gaveta-rodape .btn:last-child { margin-bottom: 0; }
+
+.gaveta-versao {
+    text-align: center;
+    font-size: 11px;
+    color: var(--lar-soft);
+    margin-top: 12px;
+}
+
+/* Campo para digitar equipe fora do escopo (só quem tem acesso global) */
+.equipe-linha-manual {
+    display: flex;
+    gap: 8px;
+    padding: 8px 6px 4px;
+    margin-top: 6px;
+    border-top: 1px solid var(--lar-line);
+}
+.equipe-linha-manual .form-control { flex: 1; min-width: 0; min-height: 44px; }
+.equipe-linha-manual .btn { flex-shrink: 0; margin: 0; padding: 0 18px; min-height: 44px; }
+
+/* ==========================================================================
+   BOTÃO DE CONFIRMAÇÃO
+   O verde-menta claro com texto escuro lia como um bloco luminoso e ofuscava
+   o resto da tela. Verde profundo com texto branco tem mais contraste e peso
+   de "ação final" — combina com o que o botão faz.
+   ========================================================================== */
+.btn-success,
+.acao-fixa .btn-success {
+    background: #1E7A47;
+    border-color: #2A9459;
+    color: var(--lar-forte);
+    font-weight: 800;
+    letter-spacing: .01em;
+}
+.btn-success:hover:not(:disabled),
+.acao-fixa .btn-success:hover:not(:disabled) {
+    background: #23904F;
+    border-color: #35A868;
+    filter: none;
+}
+.btn-success:active:not(:disabled) { background: #1A6B3E; }
+
+/* ==========================================================================
+   RESULTADO — o fim de uma ação importante
+   Substitui o alert() do navegador, que ignora o tema, muda de cara em cada
+   sistema e ainda estampa "localhost:8082 diz" em cima do conteúdo.
+   ========================================================================== */
+.resultado {
+    position: fixed;
+    inset: 0;
+    z-index: 4800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: var(--lar-veu);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    animation: larFadeIn .22s ease-out both;
+}
+.resultado.hidden { display: none; }
+.resultado.saindo { animation: larFadeOut .22s ease-in both; }
+
+.resultado-caixa {
+    width: 100%;
+    max-width: 360px;
+    padding: 30px 24px 22px;
+    border-radius: 24px;
+    background: var(--lar-painel);
+    border: 1px solid var(--lar-line-forte);
+    box-shadow: 0 34px 80px -20px rgba(0, 0, 0, .8);
+    text-align: center;
+    animation: resultadoEntra .38s var(--ease) both;
+}
+.resultado.saindo .resultado-caixa { animation: larFadeOut .2s ease-in both; }
+
+@keyframes resultadoEntra {
+    from { opacity: 0; transform: translateY(18px) scale(.94); }
+    to   { opacity: 1; transform: none; }
+}
+
+/* --- Selo animado ------------------------------------------------------- */
+.resultado-selo {
+    width: 76px;
+    height: 76px;
+    margin: 0 auto 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(111, 207, 123, .16);
+    border: 2px solid rgba(111, 207, 123, .5);
+    animation: seloPulsa .55s var(--ease) both;
+}
+.resultado-erro   .resultado-selo { background: rgba(220, 80, 70, .16); border-color: rgba(220, 80, 70, .5); }
+.resultado-aviso  .resultado-selo { background: rgba(232, 176, 75, .16); border-color: rgba(232, 176, 75, .5); }
+
+@keyframes seloPulsa {
+    0%   { transform: scale(.4); opacity: 0; }
+    60%  { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* O traço do "certo" se desenha — dá a sensação de conclusão */
+.resultado-selo svg { width: 40px; height: 40px; }
+.resultado-selo path, .resultado-selo line {
+    stroke-dasharray: 60;
+    stroke-dashoffset: 60;
+    animation: tracoDesenha .5s .28s ease-out forwards;
+}
+@keyframes tracoDesenha { to { stroke-dashoffset: 0; } }
+
+.resultado-titulo {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: var(--lar-forte);
+    margin-bottom: 6px;
+}
+.resultado-texto {
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--lar-muted);
+    margin-bottom: 18px;
+}
+
+/* --- Linhas de detalhe -------------------------------------------------- */
+.resultado-itens {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-bottom: 20px;
+    border-radius: var(--raio-md);
+    overflow: hidden;
+    background: var(--lar-line);
+    text-align: left;
+}
+.resultado-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--lar-surface-2);
+    font-size: 14.5px;
+}
+.resultado-item-rotulo { color: var(--lar-muted); }
+.resultado-item-valor { color: var(--lar-forte); font-weight: 700; white-space: nowrap; }
+
+.resultado-caixa .btn { margin: 0; }
+
+/* --- Aviso de envios pendentes (menu) -------------------------------------
+   Fica no topo do menu enquanto algum restaurante não recebeu o pedido. É a
+   rede de segurança para quando o WhatsApp tira o app da frente no meio dos
+   envios: a lista está guardada no aparelho e ele retoma por aqui. */
+.aviso-envios {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 13px 14px;
+    border-radius: var(--raio-md);
+    background: rgba(232, 176, 75, .14);
+    border: 1px solid rgba(232, 176, 75, .45);
+    border-left: 4px solid var(--lar-amber);
+    animation: larSobe .3s var(--ease) both;
+}
+.aviso-envios-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.aviso-envios-texto strong {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--lar-forte);
+}
+.aviso-envios-texto span { font-size: 12px; color: var(--lar-muted); }
+.aviso-envios .btn {
+    margin: 0;
+    width: auto;
+    flex-shrink: 0;
+    min-height: 0;
+    padding: 9px 18px;
+    font-size: 13.5px;
+}
+
+/* --- Ações do popup (um envio por restaurante) ---------------------------
+   Ficam no popup em vez de fechá-lo: com dois restaurantes ele precisa
+   mandar para um, voltar e mandar para o outro. A marca fica verde depois
+   de usada — é o que evita mandar duas vezes ou esquecer um. */
+.resultado-acoes {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.resultado-acao {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 13px 14px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-text);
+    font-family: inherit;
+    font-size: 14.5px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--t-rapida), border-color var(--t-rapida), transform .1s;
+}
+.resultado-acao:hover { border-color: var(--lar-green); }
+.resultado-acao:active { transform: scale(.99); }
+
+.resultado-acao-marca {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 2px solid var(--lar-line-forte);
+    color: var(--lar-soft);
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 1;
+}
+.resultado-acao-rotulo {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Já enviado */
+.resultado-acao.feita {
+    background: rgba(111, 207, 123, .16);
+    border-color: var(--lar-green);
+}
+.resultado-acao.feita .resultado-acao-marca {
+    background: var(--lar-green);
+    border-color: var(--lar-green);
+    color: var(--lar-bg-1);
+}
+
+/* Segundo botão do popup de resultado: discreto, pra fechar sem fazer a
+   ação principal (ex: sem compartilhar no WhatsApp). */
+.btn-texto-secundario {
+    margin-top: 4px;
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--lar-muted);
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 10px;
+    border-radius: 8px;
+    transition: background var(--t-rapida), color var(--t-rapida);
+}
+.btn-texto-secundario:hover { background: var(--lar-surface-2); color: var(--lar-text); }
+
+/* ==========================================================================
+   ASSISTENTE DE PEDIDO (etapas)
+   Antes era um formulário único de ~15 campos numa coluna só: a pessoa
+   rolava sem saber quanto faltava. Em etapas, cada tela faz uma pergunta e
+   a barra mostra onde ela está.
+   ========================================================================== */
+.passos {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 16px;
+}
+
+.passo {
+    flex: 1;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(234, 241, 232, .12);
+    transition: background var(--t);
+}
+.passo.feito { background: rgba(111, 207, 123, .55); }
+.passo.atual { background: var(--lar-green); }
+
+.passo-rotulo {
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--lar-soft);
+    margin-bottom: 6px;
+}
+
+.etapa { animation: larSobe .3s var(--ease) both; }
+.etapa.hidden { display: none; }
+
+.etapa-titulo {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: var(--lar-forte);
+    margin-bottom: 5px;
+}
+.etapa-ajuda {
+    font-size: 14px;
+    color: var(--lar-muted);
+    line-height: 1.5;
+    margin-bottom: 20px;
+}
+
+/* --- Escolha do tipo de pedido ----------------------------------------- */
+.tipo-pedido { display: flex; flex-direction: column; gap: 12px; }
+
+.tipo-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 20px 18px;
+    border-radius: var(--raio-lg);
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    box-shadow: var(--sombra-card);
+    color: var(--lar-text);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color var(--t), transform var(--t-rapida);
+}
+.tipo-card:hover { border-color: rgba(111, 207, 123, .5); transform: translateY(-2px); }
+.tipo-card:active { transform: translateY(0); }
+
+.tipo-card-icone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 58px; height: 58px;
+    flex-shrink: 0;
+    font-size: 28px;
+    border-radius: 16px;
+    background: rgba(111, 207, 123, .14);
+    border: 1px solid rgba(111, 207, 123, .3);
+}
+.tipo-card.elaine .tipo-card-icone {
+    background: rgba(232, 176, 75, .14);
+    border-color: rgba(232, 176, 75, .32);
+}
+.tipo-card-texto { flex: 1; min-width: 0; }
+.tipo-card-nome { display: block; font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
+.tipo-card-desc { display: block; font-size: 13.5px; color: var(--lar-muted); margin-top: 3px; line-height: 1.4; }
+
+/* --- Cartão PAGCORP ----------------------------------------------------- */
+/* Vários cartões: um do lado do outro, rolando na horizontal. Empilhar
+   deixaria a etapa comprida no celular e o segundo cartão fora da tela —
+   lado a lado, dá para comparar os centros de custo de uma olhada. */
+.cartoes-grade { display: flex; flex-direction: column; gap: 12px; }
+.cartoes-grade.varios {
+    flex-direction: row;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+}
+.cartoes-grade.varios .cartao {
+    flex: 0 0 84%;
+    scroll-snap-align: start;
+    padding: 18px 16px;
+}
+.cartoes-grade.varios .cartao-topo { margin-bottom: 18px; }
+
+.cartao {
+    position: relative;
+    display: block;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    padding: 22px 20px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #1B5E3C 0%, #0F3A26 55%, #133F2C 100%);
+    border: 1px solid rgba(111, 207, 123, .32);
+    box-shadow: 0 20px 44px -18px rgba(0, 0, 0, .8);
+    overflow: hidden;
+    animation: larCardIn .4s var(--ease) both;
+    transition: border-color var(--t-rapida), transform .12s, box-shadow var(--t-rapida);
+}
+button.cartao { cursor: pointer; }
+button.cartao:active { transform: scale(.985); }
+
+/* Escolhido: borda acesa + halo. Com dois cartões parecidos, a diferença
+   precisa ser visível sem ler o número. */
+.cartao.escolhido {
+    border-color: var(--lar-green);
+    box-shadow: 0 0 0 2px var(--lar-green), 0 20px 44px -18px rgba(0, 0, 0, .8);
+}
+.cartao:not(.escolhido) { opacity: .82; }
+.cartoes-grade:not(.varios) .cartao { opacity: 1; }
+
+.cartao-visto {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin-left: 8px;
+    border-radius: 50%;
+    background: var(--lar-green);
+    color: #0F3A26;
+    font-size: 13px;
+    font-weight: 900;
+    flex-shrink: 0;
+}
+
+/* Brilho diagonal: dá a leitura de cartão sem depender de imagem */
+.cartao::after {
+    content: "";
+    position: absolute;
+    top: -60%; right: -20%;
+    width: 70%; height: 220%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.05), transparent);
+    transform: rotate(18deg);
+    pointer-events: none;
+}
+
+.cartao-topo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 26px;
+}
+.cartao-marca { font-size: 12px; font-weight: 800; letter-spacing: .16em; color: var(--lar-green); }
+.cartao-chip {
+    width: 38px; height: 28px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #D9C36B, #A98F3A);
+    opacity: .9;
+}
+
+.cartao-numero {
+    font-size: 23px;
+    font-weight: 800;
+    letter-spacing: .12em;
+    color: var(--lar-forte);
+    margin-bottom: 18px;
+    font-variant-numeric: tabular-nums;
+}
+
+.cartao-rodape { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.cartao-rotulo {
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: rgba(207, 224, 212, .7);
+    margin-bottom: 3px;
+}
+.cartao-valor {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: var(--lar-forte);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cartao-titular { min-width: 0; }
+
+/* --- Refeição na etapa de fornecedor ------------------------------------ */
+.refeicao-bloco {
+    padding: 15px;
+    margin-bottom: 12px;
+    border-radius: var(--raio-lg);
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    animation: larSobe .3s var(--ease-suave) both;
+}
+.refeicao-bloco.completo { border-color: rgba(111, 207, 123, .45); }
+
+.refeicao-bloco-topo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.refeicao-bloco-icone { font-size: 22px; }
+.refeicao-bloco-nome { flex: 1; font-size: 16px; font-weight: 700; }
+.refeicao-bloco-check { color: var(--lar-green); font-size: 17px; opacity: 0; transition: opacity var(--t); }
+.refeicao-bloco.completo .refeicao-bloco-check { opacity: 1; }
+
+.sugestao-titulo {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--lar-green);
+    margin: 12px 0 8px;
+    line-height: 1.4;
+}
+.sugestao-titulo.outros { color: var(--lar-soft); font-weight: 600; }
+
+.fornecedor-opcao {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    min-height: 56px;
+    padding: 10px 13px;
+    margin-bottom: 6px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-text);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--t-rapida), border-color var(--t-rapida);
+}
+.fornecedor-opcao:hover { background: rgba(111, 207, 123, .1); border-color: rgba(111, 207, 123, .35); }
+.fornecedor-opcao.escolhido { background: rgba(111, 207, 123, .16); border-color: var(--lar-green); }
+
+.fornecedor-nome {
+    flex: 1;
+    min-width: 0;
+    font-size: 14.5px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+.fornecedor-cidade { display: block; font-size: 12px; color: var(--lar-muted); margin-top: 2px; }
+.fornecedor-preco {
+    flex-shrink: 0;
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--lar-forte);
+    white-space: nowrap;
+}
+
+/* --- Pessoas ------------------------------------------------------------ */
+.pessoa-linha {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    animation: larSobe .25s var(--ease) both;
+}
+.pessoa-nome { flex: 1; min-width: 0; font-size: 14.5px; }
+.pessoa-nome small { display: block; font-size: 12px; color: var(--lar-muted); margin-top: 1px; }
+.pessoa-selo {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(234, 241, 232, .1);
+    color: var(--lar-muted);
+}
+.pessoa-selo.externo { background: rgba(232, 176, 75, .16); color: var(--lar-amber); }
+.pessoa-remover {
+    flex-shrink: 0;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: rgba(220, 80, 70, .16);
+    border: 1px solid rgba(220, 80, 70, .3);
+    color: var(--lar-red-claro);
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.contador-pessoas { display: flex; align-items: center; gap: 12px; }
+.contador-btn {
+    width: 52px; height: 52px;
+    flex-shrink: 0;
+    border-radius: 14px;
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line-forte);
+    color: var(--lar-forte);
+    font-family: inherit;
+    font-size: 24px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background var(--t-rapida);
+}
+.contador-btn:hover { background: rgba(111, 207, 123, .14); }
+.contador-valor {
+    flex: 1;
+    text-align: center;
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--lar-forte);
+    font-variant-numeric: tabular-nums;
+}
+
+/* --- Resumo final -------------------------------------------------------- */
+.resumo-bloco {
+    padding: 16px;
+    margin-bottom: 12px;
+    border-radius: var(--raio-lg);
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+}
+.resumo-secao {
+    font-size: 11.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--lar-soft);
+    margin-bottom: 10px;
+}
+.resumo-linha {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    font-size: 14.5px;
+    border-bottom: 1px solid var(--lar-line);
+}
+.resumo-linha:last-child { border-bottom: none; }
+.resumo-linha span:first-child { color: var(--lar-muted); }
+.resumo-linha span:last-child { color: var(--lar-forte); font-weight: 700; text-align: right; }
+
+.resumo-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    margin-bottom: 14px;
+    border-radius: var(--raio-lg);
+    background: rgba(111, 207, 123, .14);
+    border: 1px solid rgba(111, 207, 123, .4);
+}
+.resumo-total-rotulo { font-size: 14px; font-weight: 700; color: var(--lar-text); }
+.resumo-total-valor { font-size: 27px; font-weight: 800; color: var(--lar-forte); }
+
+.aviso-aprovacao {
+    display: flex;
+    gap: 12px;
+    padding: 14px;
+    margin-bottom: 14px;
+    border-radius: var(--raio-md);
+    background: rgba(232, 176, 75, .12);
+    border: 1px solid rgba(232, 176, 75, .32);
+}
+.aviso-aprovacao-icone { font-size: 20px; flex-shrink: 0; }
+.aviso-aprovacao p { margin: 0; font-size: 13.5px; line-height: 1.5; color: #F0D49A; }
+.aviso-aprovacao strong { color: var(--lar-forte); }
+
+/* Navegação entre etapas */
+.nav-etapas { display: flex; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--lar-line); }
+.nav-etapas .btn { margin: 0; }
+.nav-etapas .btn-voltar { flex: 1; }
+.nav-etapas .btn-avancar { flex: 2; }
+
+/* ==========================================================================
+   FORNECEDORES AGRUPADOS POR CIDADE
+   Uma lista corrida com todos os restaurantes do projeto não diz nada. Por
+   cidade, e com as demais recolhidas, a pessoa acha o que conhece sem rolar.
+   ========================================================================== */
+.grupo-cidade {
+    margin-bottom: 8px;
+    border-radius: var(--raio-md);
+    background: rgba(10, 26, 20, .3);
+    border: 1px solid var(--lar-line);
+    overflow: hidden;
+}
+
+.grupo-cidade-topo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 13px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--lar-text);
+    list-style: none;
+    user-select: none;
+}
+.grupo-cidade-topo::-webkit-details-marker { display: none; }
+.grupo-cidade-topo::after {
+    content: "▾";
+    color: var(--lar-soft);
+    font-size: 12px;
+    transition: transform var(--t-rapida);
+}
+.grupo-cidade[open] .grupo-cidade-topo::after { transform: rotate(180deg); }
+.grupo-cidade-topo:hover { background: rgba(111, 207, 123, .08); }
+
+.grupo-cidade-qtd {
+    margin-left: auto;
+    margin-right: 6px;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: rgba(234, 241, 232, .1);
+    color: var(--lar-muted);
+    font-size: 12px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.grupo-cidade .fornecedor-opcao {
+    margin: 0 8px 8px;
+    width: calc(100% - 16px);
+}
+
+/* ==========================================================================
+   LISTA DE COLABORADORES
+   Estava tudo colado e com caixa quadrada. Respiro entre as linhas, separador
+   fino e caixa redonda — que é o que se espera de "marcar pessoa".
+   ========================================================================== *
+
+/* Caixa redonda, desenhada por nós: a nativa é quadrada e não aceita raio *
+
+/* O nome de quem está marcado ganha peso, não cor gritante *
+
+/* ==========================================================================
+   CAMPO DE DATA
+   O <input type=date> mostra no idioma do navegador (MM/DD nos EUA) e não há
+   como forçar por HTML. Solução: nosso texto em pt-BR embaixo, e o campo real
+   por cima, invisível, recebendo o toque. Abre o calendário nativo do
+   aparelho — sem showPicker(), que exige elemento visível e gesto direto.
+   ========================================================================== */
+.campo-data {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: var(--toque);
+    padding: 12px 14px;
+    border-radius: 11px;
+    background: var(--lar-surface-2);
+    border: 1px solid rgba(234, 241, 232, 0.18);
+    color: var(--lar-forte);
+    font-size: 16.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color var(--t-rapida);
+}
+.campo-data:hover { border-color: rgba(111, 207, 123, .45); }
+.campo-data:focus-within {
+    border-color: var(--lar-green);
+    box-shadow: 0 0 0 3px rgba(111, 207, 123, 0.14);
+}
+.campo-data .seletor-valor { flex: 1; min-width: 0; }
+
+.data-por-cima {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: transparent;
+    opacity: 0;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+}
+/* No Chrome o ícone nativo é o que abre o calendário: ele cobre tudo */
+.data-por-cima::-webkit-calendar-picker-indicator {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+/* ==========================================================================
+   LISTA DE COLABORADORES — leitura
+   Nome e função na mesma linha faziam nomes longos quebrarem no meio e as
+   alturas das linhas dançarem. Separados, cada linha tem a mesma estrutura:
+   nome em cima, cargo embaixo, apagado.
+   ========================================================================== *
+
+/* Marcado: o nome ganha peso, o cargo continua discreto *
+
+/* ==========================================================================
+   FOLHAS DE BUSCA
+   Abrir do tamanho do conteúdo faz a folha crescer a cada resultado, e a
+   lista pula embaixo do dedo enquanto a pessoa digita. Altura fixa desde o
+   começo: o campo fica no topo e os resultados preenchem o espaço que já
+   estava reservado.
+   ========================================================================== */
+.folha-busca .folha-conteudo {
+    height: 80dvh;
+    max-height: 80dvh;
+}
+.folha-busca .folha-corpo {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+/* O campo de busca fica fixo; só a lista rola */
+.folha-busca .picker-busca { flex-shrink: 0; }
+.folha-busca .picker-lista {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+}
+
+/* Estado inicial, antes de digitar: diz o que fazer em vez de ficar vazio */
+.picker-vazio { padding: 40px 20px; }
+
+/* ==========================================================================
+   SELEÇÃO DE COLABORADORES  —  definição única
+
+   Quem usa: líder de equipe, 50+, em pé no sol, uma mão no celular. Ele
+   marca quase todo mundo e precisa CONTAR — o total vira dinheiro no pedido.
+
+   Três decisões que vêm daí:
+
+   1. O nome manda. Nomes brasileiros completos são longos e é por eles que
+      a pessoa procura. Ficam em 15px/600, com espaço para respirar.
+
+   2. O cargo é etiqueta, não frase. Numa turma florestal ele se repete quase
+      linha a linha ("TRABALHADOR FLORESTAL BRIGADISTA"); tratado como texto
+      corrido, dobrava a altura da lista e empurrava os nomes para longe.
+      Vira caixa-alta pequena e apagada — está lá para desempatar homônimo,
+      não para ser lido.
+
+   3. Marcado é estado calmo. Como quase todos ficam marcados, um destaque
+      forte deixaria a lista inteira gritando. O que muda é o peso do nome e
+      um fundo levíssimo.
+   ========================================================================== */
+
+.employees-list {
+    display: flex;
+    flex-direction: column;
+    max-height: 360px;
+    overflow-y: auto;
+    padding: 6px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+}
+
+.employee-item {
+    /* Sem bolinha: a linha inteira é o controle. Mais fácil de acertar com
+       o dedo e menos elemento pra brigar visualmente. */
+    display: flex;
+    align-items: center;
+    padding: 14px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background var(--t-rapida);
+    /* Âncora do checkbox escondido logo abaixo. Sem isto ele é posicionado
+       em relação a um ancestral distante, e ao tocar na linha o navegador
+       rolava a página até onde achava que o campo estava — a tela "pulava"
+       para o fim da lista a cada nome marcado. */
+    position: relative;
+}
+
+.colab-texto {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+/* Filete só entre linhas — a última não fecha a lista com risco solto */
+.employee-item + .employee-item {
+    box-shadow: 0 -1px 0 var(--lar-line);
+}
+
+.employee-item:hover { background: rgba(111, 207, 123, .07); }
+/* Marcado se vê pela linha inteira: tinta de fundo + friso na borda esquerda. */
+.employee-item:has(input:checked) {
+    background: rgba(111, 207, 123, .14);
+    box-shadow: inset 3px 0 0 0 var(--lar-green);
+}
+
+/* O checkbox continua existindo (é o que o clique alterna e o que os
+   fluxos leem), só não aparece: a linha inteira já mostra o estado. */
+.employee-item input[type="checkbox"] {
+    position: absolute;
+    /* Preso ao topo da própria linha: ao tocar, o foco vai para ele e o
+       navegador o traz "para a vista" — se ele estivesse solto, essa rolagem
+       jogaria a página para longe do nome que acabou de ser marcado. */
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+    padding: 0;
+}
+
+/* Navegação por teclado precisa mostrar onde está, mesmo com o input oculto */
+.employee-item:has(input:focus-visible) {
+    outline: 2px solid var(--lar-green);
+    outline-offset: -2px;
+}
+
+/* --- Nome e cargo -------------------------------------------------------- */
+.colab-nome {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -.01em;
+    color: var(--lar-text);
+}
+
+.colab-funcao {
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--lar-soft);
+}
+
+.employee-item input:checked ~ .colab-texto .colab-nome { color: var(--lar-forte); font-weight: 700; }
+
+/* (o contorno de foco fica na LINHA, logo acima — desenhá-lo no input não
+   apareceria: ele é invisível desde que a bolinha saiu) */
+
+/* --- Contador: o número é o que ele veio conferir ------------------------ */
+.colab-topo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.colab-contagem {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--lar-muted);
+}
+.colab-contagem strong {
+    font-size: 17px;
+    color: var(--lar-forte);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   CIDADE COMO CABEÇALHO, NÃO COMO SANFONA
+   Com um ou dois restaurantes por cidade, recolher escondia justamente o que
+   a pessoa abriu a tela para ver. A cidade situa; quem decide é o nome do
+   restaurante e o preço, e os dois ficam à vista.
+   ========================================================================== */
+.cidade-cabecalho {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0 8px;
+    font-size: 11.5px;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--lar-soft);
+}
+.cidade-cabecalho::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--lar-line);
+}
+.cidade-qtd {
+    order: 1;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: rgba(234, 241, 232, .1);
+    color: var(--lar-muted);
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: 0;
+}
+
+/* ==========================================================================
+   RESUMO DAS REFEIÇÕES
+   Rótulo/valor em duas colunas não serve aqui: nome de restaurante é longo e
+   a conta tem três partes. Empilhado, cada refeição tem a mesma leitura —
+   o que é, quanto deu, de onde vem, como fechou a conta.
+   ========================================================================== */
+.resumo-refeicao {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--lar-line);
+}
+.resumo-refeicao:last-child { border-bottom: none; padding-bottom: 0; }
+.resumo-refeicao:first-of-type { padding-top: 0; }
+
+.resumo-refeicao-topo {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+.resumo-refeicao-nome {
+    flex: 1;
+    min-width: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--lar-text);
+}
+/* O subtotal é o que ele confere linha a linha: não quebra nunca */
+.resumo-refeicao-subtotal {
+    flex-shrink: 0;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--lar-forte);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.resumo-refeicao-forn {
+    font-size: 13.5px;
+    line-height: 1.4;
+    color: var(--lar-muted);
+    margin-bottom: 3px;
+}
+.resumo-refeicao-conta {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--lar-soft);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   HISTÓRICO DE PEDIDOS
+   Um cartão por DIA. Fechado responde o que se procura de relance — quando,
+   o quê, para quantos, quanto deu. Aberto, mostra o detalhe e as fotos, que
+   é o que alguém vem conferir quando há dúvida.
+   ========================================================================== */
+
+.hist-filtros {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 12px 0 14px;
+    padding: 12px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+}
+
+.hist-filtro-atalhos { display: flex; gap: 6px; flex-wrap: wrap; }
+.hist-filtro-atalhos .hist-chip { flex: 0 1 auto; min-width: 0; }
+
+.hist-filtro-datas { display: flex; gap: 10px; }
+.hist-filtro-data-campo { flex: 1; min-width: 0; }
+.hist-filtro-data-campo label {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--lar-soft);
+    margin-bottom: 4px;
+}
+.hist-filtro-data-campo input[type="date"] {
+    width: 100%;
+    height: 38px;
+    padding: 0 10px;
+    border-radius: 9px;
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-text);
+    font-family: inherit;
+    font-size: 13.5px;
+}
+
+.hist-filtro-tipos { display: flex; gap: 6px; flex-wrap: wrap; }
+.hist-chip {
+    flex: 1;
+    min-width: 64px;
+    padding: 8px 6px;
+    border-radius: 8px;
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-muted);
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background var(--t-rapida), border-color var(--t-rapida), color var(--t-rapida);
+}
+.hist-chip:hover { border-color: var(--lar-green); }
+.hist-chip.ativo {
+    background: var(--lar-green);
+    border-color: var(--lar-green);
+    color: var(--lar-bg-1);
+}
+.hist-cartao {
+    margin-bottom: 7px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    overflow: hidden;
+    animation: larSobe .35s var(--ease-suave) both;
+    transition: border-color var(--t);
+}
+.hist-cartao.aberto { border-color: rgba(111, 207, 123, .4); }
+
+.hist-topo {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    padding: 10px 12px 8px;
+    background: none;
+    border: none;
+    color: var(--lar-text);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.hist-topo:hover { background: rgba(111, 207, 123, .06); }
+
+/* A data vira bloco de calendário: é o primeiro filtro que a pessoa aplica */
+.hist-data {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    flex-shrink: 0;
+    padding: 5px 0;
+    border-radius: 9px;
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    line-height: 1;
+}
+.hist-data strong {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--lar-forte);
+    font-variant-numeric: tabular-nums;
+}
+.hist-data small {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--lar-soft);
+    margin-top: 2px;
+}
+
+.hist-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hist-tipos {
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--lar-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.hist-meta { font-size: 11.5px; color: var(--lar-muted); }
+
+.hist-valores {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    flex-shrink: 0;
+}
+.hist-valores strong {
+    font-size: 14.5px;
+    font-weight: 800;
+    color: var(--lar-forte);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.hist-seta { color: var(--lar-soft); font-size: 10px; }
+
+/* --- Selos: situação e IDs ---------------------------------------------- */
+.hist-selos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 0 12px 9px 63px;
+}
+
+.hist-selo {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(234, 241, 232, .08);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-muted);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .03em;
+}
+.hist-selo.ok     { background: rgba(111, 207, 123, .16); border-color: rgba(111,207,123,.4); color: var(--lar-forte); }
+.hist-selo.nao    { background: rgba(220, 80, 70, .16);  border-color: rgba(220,80,70,.4);  color: var(--lar-red-claro); }
+.hist-selo.espera { background: rgba(232, 176, 75, .16); border-color: rgba(232,176,75,.4); color: var(--lar-amber); }
+
+/* O ID é para conferência com o financeiro: número mono, sem ambiguidade */
+.hist-selo-id { font-variant-numeric: tabular-nums; letter-spacing: .05em; }
+
+/* --- Painel aberto ------------------------------------------------------- */
+.hist-detalhe {
+    padding: 0 12px 12px;
+    border-top: 1px solid var(--lar-line);
+    animation: larSobe .28s var(--ease) both;
+}
+
+.hist-contexto {
+    padding: 9px 0;
+    border-bottom: 1px solid var(--lar-line);
+}
+.hist-contexto-linha {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 0;
+    font-size: 13px;
+}
+.hist-contexto-linha span:first-child { color: var(--lar-soft); }
+.hist-contexto-linha span:last-child { color: var(--lar-text); font-weight: 600; text-align: right; }
+
+.hist-item {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--lar-line);
+}
+.hist-item:last-child { border-bottom: none; padding-bottom: 0; }
+
+.hist-item-topo {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+.hist-item-nome { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; color: var(--lar-text); }
+.hist-item-valor {
+    flex-shrink: 0;
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--lar-forte);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.hist-item-forn { font-size: 13.5px; color: var(--lar-muted); line-height: 1.4; }
+.hist-item-conta {
+    font-size: 12px;
+    color: var(--lar-soft);
+    margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+}
+
+.hist-temp {
+    margin-top: 8px;
+    padding: 8px 11px;
+    border-radius: 9px;
+    background: rgba(90, 169, 230, .1);
+    border: 1px solid rgba(90, 169, 230, .26);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #BBD9F2;
+}
+
+/* --- Galeria ------------------------------------------------------------- */
+.hist-galeria {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.hist-foto {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    padding: 0;
+    border-radius: var(--raio-md);
+    border: 1px solid var(--lar-line);
+    background: var(--lar-surface-2);
+    overflow: hidden;
+    cursor: zoom-in;
+    transition: border-color var(--t-rapida), transform var(--t-rapida);
+}
+.hist-foto:hover { border-color: var(--lar-green); transform: scale(1.02); }
+.hist-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.hist-foto-rotulo {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: 5px 8px;
+    background: linear-gradient(to top, rgba(2, 12, 8, .88), transparent);
+    color: var(--lar-forte);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    text-align: left;
+}
+
+.hist-foto.falhou {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: auto;
+    padding: 16px;
+    color: var(--lar-soft);
+    font-size: 12px;
+    cursor: default;
+}
+
+/* Marmitex sem foto é informação, não ausência silenciosa */
+.hist-sem-foto {
+    margin-top: 9px;
+    padding: 9px 11px;
+    border-radius: 9px;
+    background: rgba(232, 176, 75, .1);
+    border: 1px dashed rgba(232, 176, 75, .32);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #F0D49A;
+}
+
+/* ==========================================================================
+   FRENTES — a equipe dividida em mais de um local no mesmo dia
+   Enquanto não há divisão, a barra é só o botão "Dividir equipe": quem não
+   precisa disso não paga nem espaço nem atenção por ela.
+   ========================================================================== */
+.frentes-barra {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.frente-aba {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 13px;
+    border-radius: 999px;
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-muted);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: background var(--t-rapida), border-color var(--t-rapida), color var(--t-rapida);
+}
+.frente-aba:hover { border-color: var(--lar-green); }
+.frente-aba.ativa {
+    background: var(--lar-green);
+    border-color: var(--lar-green);
+    color: var(--lar-bg-1);
+}
+
+/* Quantas pessoas já foram marcadas nesta frente */
+.frente-aba-n {
+    min-width: 20px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(20, 48, 38, .18);
+    font-size: 11px;
+    font-weight: 800;
+    text-align: center;
+}
+.frente-aba.ativa .frente-aba-n { background: rgba(255, 255, 255, .3); }
+
+/* Dividir / adicionar / remover: ações, não abas — traço pontilhado */
+.frente-aba-acao {
+    background: transparent;
+    border-style: dashed;
+    color: var(--lar-soft);
+    font-weight: 800;
+}
+.frente-aba-acao:hover { color: var(--lar-green); }
+
+/* --- Cabeçalho da frente (uma tela por local) -----------------------------
+   Quando a equipe se divide, a etapa de pessoas vira uma tela por frente.
+   O nome do local ocupa o lugar do título, grande, porque é ele que
+   responde "onde eu estou marcando agora". */
+.frente-cabecalho {
+    margin-bottom: 14px;
+    padding: 14px 15px;
+    border-radius: var(--raio-md);
+    background: rgba(111, 207, 123, .12);
+    border: 1px solid rgba(111, 207, 123, .4);
+    border-left: 4px solid var(--lar-green);
+    animation: larSobe .28s var(--ease) both;
+}
+.frente-cabecalho-passo {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--lar-green);
+    margin-bottom: 4px;
+}
+.frente-cabecalho-nome {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: -.01em;
+    color: var(--lar-forte);
+}
+
+/* --- Pedido normal x separado por refeição --------------------------------
+   Nem todo mundo come tudo: 10 tomam café e só 5 almoçam. "Pedido normal" é
+   o padrão; as abas de refeição só aparecem quando ele separa. Sem título em
+   cima — os dois botões já dizem do que se trata. */
+.quem-come {
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+}
+.quem-come-botoes { display: flex; gap: 6px; }
+.quem-come-btn {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 6px;
+    border-radius: 8px;
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-muted);
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background var(--t-rapida), border-color var(--t-rapida), color var(--t-rapida);
+}
+.quem-come-btn:hover { border-color: var(--lar-green); }
+.quem-come-btn.ativa {
+    background: var(--lar-green);
+    border-color: var(--lar-green);
+    color: var(--lar-bg-1);
+}
+
+.refeicoes-abas {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 9px;
+    padding-top: 9px;
+    border-top: 1px solid var(--lar-line);
+}
+.refeicao-aba {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 11px;
+    border-radius: 999px;
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-muted);
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background var(--t-rapida), border-color var(--t-rapida), color var(--t-rapida);
+}
+.refeicao-aba:hover { border-color: var(--lar-green); }
+.refeicao-aba.ativa {
+    background: var(--lar-green);
+    border-color: var(--lar-green);
+    color: var(--lar-bg-1);
+}
+/* Quantos comem esta refeição — é o número que multiplica o preço */
+.refeicao-aba-n {
+    min-width: 20px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(20, 48, 38, .18);
+    font-size: 11px;
+    font-weight: 800;
+    text-align: center;
+}
+.refeicao-aba.ativa .refeicao-aba-n { background: rgba(255, 255, 255, .3); }
+
+/* Ícones das refeições que a pessoa come, na linha dela */
+.colab-refeicoes { display: flex; gap: 4px; margin-top: 2px; }
+.colab-refeicao-chip { font-size: 13px; line-height: 1; }
+
+/* Título do bloco de quem já foi levado por outra frente */
+.colab-divisao {
+    padding: 12px 12px 6px;
+    font-size: 10.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--lar-soft);
+    border-top: 1px solid var(--lar-line);
+    margin-top: 4px;
+}
+
+/* Pessoa que já está em OUTRA frente: visível, mas fora de alcance */
+.employee-item.noutra-frente { opacity: .5; cursor: not-allowed; }
+.employee-item.noutra-frente .colab-nome { text-decoration: line-through; }
+.colab-noutra {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    color: var(--lar-amber);
+}
+
+/* ==========================================================================
+   ESCOLHA DE EQUIPE (1ª etapa do pedido)
+   Verde = já tem pedido lançado para essa equipe. O sinal existe para
+   ninguém repetir pedido sem querer — a data do último responde "já pedi
+   para essa hoje?" sem precisar abrir o histórico.
+   ========================================================================== */
+.equipe-card {
+    display: block;
+    width: 100%;
+    text-align: left;
+    margin-bottom: 9px;
+    padding: 13px 14px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-text);
+    font-family: inherit;
+    cursor: pointer;
+    transition: background var(--t-rapida), border-color var(--t-rapida), transform .1s;
+}
+.equipe-card:hover { border-color: var(--lar-green); }
+.equipe-card:active { transform: scale(.995); }
+
+.equipe-card.pediu {
+    background: rgba(111, 207, 123, .12);
+    border-color: rgba(111, 207, 123, .45);
+}
+.equipe-card.ativa { box-shadow: inset 3px 0 0 0 var(--lar-green); }
+
+.equipe-card-topo {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 5px;
+}
+.equipe-card-cod {
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: .02em;
+    color: var(--lar-forte);
+    flex-shrink: 0;
+}
+.equipe-card-lider {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--lar-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.equipe-card-rodape {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.equipe-card-ultimo { font-size: 12px; color: var(--lar-soft); font-weight: 600; }
+.equipe-card-pend {
+    font-size: 10.5px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(232, 176, 75, .18);
+    border: 1px solid rgba(232, 176, 75, .45);
+    color: var(--lar-amber);
+}
+
+/* --- Filtro de equipe (Histórico e Pendências) --------------------------
+   Uma faixa de botões, não uma lista suspensa: com duas ou três equipes,
+   ver todas de uma vez é mais rápido do que abrir um menu para escolher. */
+.filtro-equipes {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 10px 0 12px;
+}
+
+.filtro-equipe {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-muted);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: .02em;
+    cursor: pointer;
+    transition: background var(--t-rapida), border-color var(--t-rapida), color var(--t-rapida);
+}
+.filtro-equipe:hover { border-color: var(--lar-green); }
+.filtro-equipe.ativa {
+    background: var(--lar-green);
+    border-color: var(--lar-green);
+    color: var(--lar-bg-1);
+}
+
+/* O número de pendências daquela equipe */
+.filtro-equipe-n {
+    min-width: 20px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(232, 176, 75, .9);
+    color: #2A1E05;
+    font-size: 11px;
+    font-weight: 800;
+    text-align: center;
+}
+.filtro-equipe.ativa .filtro-equipe-n { background: var(--lar-bg-1); color: var(--lar-green); }
+
+/* Nome de quem está usando, no rodapé (a equipe saiu daqui) */
+.rodape-usuario {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--lar-forte);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ==========================================================================
+   DEPÓSITO FINANCEIRO
+   PAGCORP e valor precisam ser vistos de longe — é o que a pessoa digita
+   no banco. O resto (nome, projeto, data) é só contexto pra achar o pedido
+   certo, então fica pequeno e discreto embaixo.
+   ========================================================================== */
+/* --- Filtros compactos ---------------------------------------------------
+   Nesta tela o conteúdo é a LISTA; o filtro é meio, não fim. Duas linhas de
+   chips baixinhos, e o intervalo de datas escondido atrás do 📅 — os atalhos
+   resolvem o dia a dia e não custam altura. */
+.dep-filtros {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin: 8px 0 10px;
+}
+
+.dep-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+
+.dep-chip {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 8px;
+    border-radius: 7px;
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-muted);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background var(--t-rapida), border-color var(--t-rapida), color var(--t-rapida);
+}
+.dep-chip:hover { border-color: var(--lar-green); }
+.dep-chip.ativo {
+    background: var(--lar-green);
+    border-color: var(--lar-green);
+    color: var(--lar-bg-1);
+}
+/* O 📅 é ícone: não estica junto com os outros */
+.dep-chip-data { flex: 0 0 auto; padding: 6px 10px; }
+
+.dep-datas {
+    display: flex;
+    gap: 8px;
+    animation: larSobe .2s var(--ease) both;
+}
+.dep-datas label {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--lar-soft);
+}
+.dep-datas input[type="date"] {
+    flex: 1;
+    min-width: 0;
+    height: 32px;
+    padding: 0 8px;
+    border-radius: 7px;
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-text);
+    font-family: inherit;
+    font-size: 12.5px;
+}
+
+.dep-resumo {
+    font-size: 12px;
+    color: var(--lar-soft);
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+/* Barra de seleção múltipla — fica grudada no topo da lista porque, com
+   muitos depósitos, o botão precisa continuar ao alcance sem rolar de volta. */
+.dep-barra {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+.dep-todos {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--lar-text);
+    cursor: pointer;
+}
+/* width:auto anula o width:100% do .btn base — sem isto o botão tomava a
+   barra inteira e empurrava a caixa de seleção para fora do cartão. */
+.dep-barra .btn {
+    margin: 0;
+    width: auto;
+    flex-shrink: 0;
+    min-height: 0;
+    padding: 9px 16px;
+    font-size: 13px;
+}
+.dep-barra .btn:disabled { opacity: .45; cursor: default; }
+
+/* Caixas de seleção (barra e cartão): a nativa é pequena demais para dedo */
+.dep-todos input[type="checkbox"],
+.dep-marca {
+    appearance: none;
+    -webkit-appearance: none;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    border-radius: 6px;
+    border: 2px solid var(--lar-line-forte);
+    background-color: var(--lar-surface);
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 13px 13px;
+    cursor: pointer;
+    transition: background-color var(--t-rapida), border-color var(--t-rapida);
+}
+.dep-todos input[type="checkbox"]:checked,
+.dep-marca:checked {
+    background-color: var(--lar-green);
+    border-color: var(--lar-green);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.3l3.3 3.3L13 4.3' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* --- Cartão, sempre fechado ------------------------------------------------
+   Fechado mostra as quatro coisas que decidem o depósito: quem pediu,
+   PAGCORP, valor e o aval. O resto abre com um toque. */
+.dep-cartao {
+    margin-bottom: 8px;
+    border-radius: var(--raio-md);
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    overflow: hidden;
+    animation: larSobe .3s var(--ease-suave) both;
+    transition: border-color var(--t);
+}
+.dep-cartao.aberto { border-color: rgba(111, 207, 123, .45); }
+/* Já depositado é histórico: fica de lado, sem competir com o que falta */
+.dep-cartao.feito { opacity: .72; }
+
+.dep-topo-linha {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 11px 13px;
+    cursor: pointer;
+}
+.dep-topo-linha:hover { background: rgba(111, 207, 123, .06); }
+
+.dep-meio { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+
+.dep-nome {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--lar-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* PAGCORP e valor grandes mesmo fechado: é o que se digita no banco */
+.dep-numeros { display: flex; align-items: baseline; gap: 12px; }
+.dep-conta-linha {
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: .02em;
+    color: var(--lar-forte);
+    font-variant-numeric: tabular-nums;
+}
+.dep-valor-linha {
+    margin-left: auto;
+    font-size: 19px;
+    font-weight: 800;
+    color: var(--lar-forte);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.dep-aval { font-size: 11.5px; font-weight: 700; color: var(--lar-green); }
+.dep-aval.espera { color: var(--lar-amber); }
+.dep-aval.ok { color: var(--lar-soft); }
+
+.dep-seta { color: var(--lar-soft); font-size: 10px; flex-shrink: 0; }
+
+/* --- Detalhe (aberto) ---------------------------------------------------- */
+.dep-contexto {
+    padding: 10px 13px 13px;
+    border-top: 1px solid var(--lar-line);
+    animation: larSobe .25s var(--ease) both;
+}
+.dep-linha {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 0;
+    font-size: 13px;
+}
+.dep-linha span:first-child { color: var(--lar-soft); }
+.dep-linha span:last-child { color: var(--lar-text); font-weight: 600; text-align: right; }
+
+.dep-cartao > .btn { margin: 0 13px 13px; width: calc(100% - 26px); }
+
+/* ==========================================================================
+   CONVITE PARA CADASTRAR O PAGCORP
+   Só aparece para quem ainda não tem cartão na base. É um caminho de saída,
+   não uma ação do dia a dia — por isso fica abaixo da opção principal.
+   ========================================================================== */
+.convite-cadastro {
+    display: none;
+    margin-top: 6px;
+    padding: 16px;
+    border-radius: var(--raio-lg);
+    background: rgba(111, 207, 123, .09);
+    border: 1px dashed rgba(111, 207, 123, .4);
+    animation: larSobe .3s var(--ease) both;
+}
+.convite-cadastro.mostrar { display: block; }
+
+.convite-topo { display: flex; gap: 12px; margin-bottom: 13px; }
+.convite-icone { font-size: 22px; flex-shrink: 0; line-height: 1.2; }
+.convite-topo strong {
+    display: block;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--lar-forte);
+    margin-bottom: 2px;
+}
+.convite-topo span {
+    display: block;
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--lar-muted);
+}
+.convite-cadastro .btn { margin: 0; }
+
+/* Com cartão já escolhido, o cadastro vira opção secundária: some a borda
+   tracejada e o fundo, fica só a linha de texto e o botão. */
+.convite-cadastro.discreto {
+    background: transparent;
+    border: none;
+    border-top: 1px solid var(--lar-line);
+    border-radius: 0;
+    padding: 16px 0 0;
+    margin-top: 14px;
+}
+.convite-cadastro.discreto .convite-icone { font-size: 18px; }
+.convite-cadastro.discreto .convite-topo strong { font-size: 14px; }
+.convite-cadastro.discreto .convite-topo span { font-size: 13px; }

@@ -1,26 +1,38 @@
 {
-  "name": "Sistema de Pedidos de Refeições",
+  "name": "Refeições Larsil",
   "short_name": "Refeições",
-  "description": "Sistema para pedidos de refeições com funcionalidade offline",
-  "start_url": "./sistema-pedidos.html",
+  "description": "Pedidos de refeições de campo — Larsil Serviços Florestais",
+  "start_url": "/login.html",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#ffffff",
-  "theme_color": "#667eea",
+  "background_color": "#0F251D",
+  "theme_color": "#0F251D",
   "icons": [
     {
-      "src": "icon_PR_otimizado.png",
+      "src": "/assets/icone-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "icon_PR_otimizado.png", 
+      "src": "/assets/icone-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icone-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/assets/icone-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
-  "scope": "/",
   "prefer_related_applications": false
 }

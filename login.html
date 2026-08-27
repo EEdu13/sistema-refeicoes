@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0F251D">
+    <title>Entrar - Refeições Larsil</title>
+
+    <!-- PWA -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icone-32.png">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/icone-64.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/icone-180.png">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Refeições">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/theme.css">
+    <link rel="stylesheet" href="/assets/login.css">
+    <script src="/assets/session.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--lar-bg-1);
+            color: var(--lar-text);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Convite para instalar o PWA (Android/Chrome) */
+        .instalar-caixa {
+            margin-top: 1rem;
+            padding: 14px;
+            border-radius: var(--raio-md);
+            background: rgba(111, 207, 123, 0.1);
+            border: 1px solid rgba(111, 207, 123, 0.26);
+            text-align: center;
+            display: none;
+            animation: larSobe .35s var(--ease) both;
+        }
+        .instalar-caixa.mostrar { display: block; }
+        .instalar-titulo { font-size: 13px; font-weight: 700; color: var(--lar-green); margin-bottom: 3px; }
+        .instalar-sub { font-size: 11.5px; color: var(--lar-muted); margin-bottom: 10px; }
+
+        /* Instruções de instalação no iOS (não há prompt nativo) */
+        .ios-caixa {
+            margin-top: 1rem;
+            padding: 14px 16px;
+            border-radius: var(--raio-md);
+            background: var(--lar-surface-2);
+            border: 1px solid var(--lar-line);
+            display: none;
+            animation: larSobe .35s var(--ease) both;
+        }
+        .ios-caixa.mostrar { display: block; }
+        .ios-titulo {
+            font-size: 12px; font-weight: 700; color: var(--lar-text);
+            margin-bottom: 8px; display: flex; align-items: center; gap: 7px;
+        }
+        .ios-passos { font-size: 11.5px; line-height: 1.75; color: var(--lar-muted); padding-left: 18px; }
+        .ios-passos strong { color: var(--lar-text); }
+    </style>
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-card">
+            <img src="/assets/larsil-logo.png" alt="Larsil Serviços Florestais" class="login-logo">
+            <p class="login-eyebrow">Refeições — Pedidos de Campo</p>
+
+            <form id="loginForm" novalidate>
+                <div class="login-field">
+                    <label class="login-label" for="login">Usuário</label>
+                    <div class="login-input-row">
+                        <input
+                            id="login"
+                            class="login-input"
+                            placeholder="joao.silva"
+                            autocomplete="username"
+                            autocapitalize="none"
+                            autocorrect="off"
+                            spellcheck="false"
+                            enterkeyhint="next"
+                            autofocus>
+                        <!-- avatar entra aqui enquanto a pessoa digita -->
+                        <div id="avatarSlot"></div>
+                    </div>
+                </div>
+
+                <div class="login-field">
+                    <label class="login-label" for="senha">Senha</label>
+                    <div class="login-input-row" style="position: relative;">
+                        <input
+                            id="senha"
+                            class="login-input"
+                            type="password"
+                            placeholder="••••••••"
+                            autocomplete="current-password"
+                            enterkeyhint="go"
+                            style="padding-right: 44px;">
+                        <button type="button" id="togglePwd" class="login-pwd-toggle" tabindex="-1" aria-label="Mostrar senha">👁</button>
+                    </div>
+                </div>
+
+                <div id="erroBox" class="login-error" style="display: none;"></div>
+
+                <button type="submit" id="btnEntrar" class="login-submit">
+                    <span id="btnIcone">→</span>
+                    <span id="btnTexto">Entrar</span>
+                </button>
+            </form>
+
+            <div class="login-footer">
+                Larsil Serviços Florestais<br>
+                Identidade única — <a href="https://painelgestor.up.railway.app" target="_blank" rel="noopener">IAM Larsil</a>
+            </div>
+        </div>
+    </div>
+
+    <div style="max-width: 400px; margin: 0 auto; padding: 0 1rem calc(2rem + env(safe-area-inset-bottom));">
+        <!-- Instalação do app (Android/Chrome) -->
+        <div id="instalarCaixa" class="instalar-caixa">
+            <div class="instalar-titulo">📱 Instalar aplicativo</div>
+            <div class="instalar-sub">Abre mais rápido e funciona sem sinal no campo.</div>
+            <button id="btnInstalar" class="lar-btn lar-btn-primario lar-btn-bloco">⬇️ Instalar agora</button>
+        </div>
+
+        <!-- Instalação no iPhone/iPad -->
+        <div id="iosCaixa" class="ios-caixa">
+            <div class="ios-titulo">🍎 Instalar no iPhone/iPad</div>
+            <ol class="ios-passos">
+                <li>Toque em <strong>Compartilhar</strong></li>
+                <li>Role e toque em <strong>Adicionar à Tela de Início</strong></li>
+                <li>Confirme em <strong>Adicionar</strong></li>
+            </ol>
+        </div>
+
+        <div class="login-extra">
+            <button type="button" class="login-extra-btn" id="btnLimpar">🧹 Limpar dados do app</button>
+
+            <!-- Confirmação embutida no lugar do confirm() do navegador, que
+                 destoa do resto e some no PWA instalado em alguns aparelhos. -->
+            <div class="login-confirma" id="confirmaLimpar" hidden>
+                <p>Apagar cache, filas e login salvo deste aparelho?<br>
+                   <strong>Pedidos ainda não enviados serão perdidos.</strong></p>
+                <div class="login-confirma-botoes">
+                    <button type="button" class="login-extra-btn" id="btnLimparNao">Cancelar</button>
+                    <button type="button" class="login-confirma-ok" id="btnLimparSim">Apagar</button>
+                </div>
+            </div>
+
+            <div style="font-size: 10px; color: var(--lar-soft); margin-top: 6px;">
+                versão <span id="versaoApp">5.0.0</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // Já tem sessão? vai direto pro app.
+        // sessaoUsavel() e não sessaoValida(): offline com token vencido, o
+        // modo campo continua deixando entrar (ver assets/session.js).
+        // ==========================================
+        if (SESSION.sessaoUsavel()) {
+            window.location.replace(SESSION.getEquipe() ? '/sistema-pedidos.html' : '/escolher-equipe.html');
+        }
+
+        const form = document.getElementById('loginForm');
+        const inputLogin = document.getElementById('login');
+        const inputSenha = document.getElementById('senha');
+        const erroBox = document.getElementById('erroBox');
+        const btn = document.getElementById('btnEntrar');
+        const btnIcone = document.getElementById('btnIcone');
+        const btnTexto = document.getElementById('btnTexto');
+        const avatarSlot = document.getElementById('avatarSlot');
+
+        // URL pública das fotos (o PCP resolve por nome); precisa vir antes do token
+        let FOTO_BASE = '';
+        SESSION.carregarConfig().then(c => { if (c && c.fotoBaseUrl) FOTO_BASE = c.fotoBaseUrl; });
+
+        // ==========================================
+        // AVATAR ENQUANTO DIGITA
+        //
+        // O login é "nome.sobrenome", mas a foto é resolvida por NOME COMPLETO.
+        // Guardamos login -> nome real após o 1º login bem-sucedido; a partir da
+        // 2ª vez a foto certa aparece instantânea. Sem cache, chutamos o nome a
+        // partir do login ("rodrigo.dlugosz" -> "Rodrigo Dlugosz") — o resolvedor
+        // do PCP normaliza e costuma acertar mesmo com o chute.
+        // ==========================================
+        const NOME_CACHE_KEY = 'larsil_nome_cache';
+
+        function lerNomeCache(login) {
+            try {
+                return JSON.parse(localStorage.getItem(NOME_CACHE_KEY) || '{}')[login.toLowerCase()] || null;
+            } catch { return null; }
+        }
+
+        function salvarNomeCache(login, nome) {
+            try {
+                const cache = JSON.parse(localStorage.getItem(NOME_CACHE_KEY) || '{}');
+                cache[login.toLowerCase()] = nome;
+                localStorage.setItem(NOME_CACHE_KEY, JSON.stringify(cache));
+            } catch { /* best-effort */ }
+        }
+
+        function nomeAdivinhado(login) {
+            return login.replace(/[._]+/g, ' ').trim().split(/\s+/).filter(Boolean)
+                .map(p => p[0].toUpperCase() + p.slice(1).toLowerCase()).join(' ');
+        }
+
+        let nomePreview = '';
+        function renderAvatar(nome) {
+            if (!nome || !FOTO_BASE) { avatarSlot.replaceChildren(); return; }
+            if (nome === nomePreview) return;   // não repinta (reiniciaria a animação à toa)
+            nomePreview = nome;
+
+            const box = document.createElement('div');
+            box.className = 'login-avatar-preview';
+
+            const img = document.createElement('img');
+            img.alt = '';
+            img.referrerPolicy = 'no-referrer';
+            img.src = `${FOTO_BASE}/${encodeURIComponent(nome)}`;
+            img.onerror = () => {
+                box.replaceChildren();
+                const span = document.createElement('span');
+                span.textContent = SESSION.iniciais(nome);
+                box.appendChild(span);
+            };
+
+            box.appendChild(img);
+            avatarSlot.replaceChildren(box);
+        }
+
+        let debounceAvatar;
+        inputLogin.addEventListener('input', () => {
+            esconderErro();
+            clearTimeout(debounceAvatar);
+            const l = inputLogin.value.trim();
+            if (l.length < 3) { avatarSlot.replaceChildren(); nomePreview = ''; return; }
+            debounceAvatar = setTimeout(() => renderAvatar(lerNomeCache(l) || nomeAdivinhado(l)), 300);
+        });
+
+        inputSenha.addEventListener('input', esconderErro);
+
+        // ==========================================
+        // MOSTRAR/ESCONDER SENHA
+        // ==========================================
+        document.getElementById('togglePwd').addEventListener('click', () => {
+            const mostrando = inputSenha.type === 'text';
+            inputSenha.type = mostrando ? 'password' : 'text';
+            document.getElementById('togglePwd').textContent = mostrando ? '👁' : '🙈';
+        });
+
+        function mostrarErro(msg) { erroBox.textContent = msg; erroBox.style.display = 'block'; }
+        function esconderErro() { erroBox.style.display = 'none'; }
+
+        function carregando(sim) {
+            btn.disabled = sim;
+            inputLogin.disabled = sim;
+            inputSenha.disabled = sim;
+            btnTexto.textContent = sim ? 'Entrando…' : 'Entrar';
+            btnIcone.className = sim ? 'login-spinner' : '';
+            btnIcone.textContent = sim ? '' : '→';
+        }
+
+        // ==========================================
+        // LOGIN (via IAM, pelo nosso backend)
+        // ==========================================
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const login = inputLogin.value.trim();
+            const senha = inputSenha.value;
+
+            if (!login || !senha) { mostrarErro('Preencha usuário e senha.'); return; }
+
+            if (!navigator.onLine) {
+                mostrarErro('Sem conexão. O primeiro login precisa de internet — depois o app funciona offline.');
+                return;
+            }
+
+            esconderErro();
+            carregando(true);
+
+            try {
+                const response = await fetch(`${SESSION.API_BASE_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ login, senha })
+                });
+
+                const dados = await response.json().catch(() => ({}));
+
+                // Checa o status E o corpo: sem token não há login, mesmo que
+                // algum intermediário devolva 200 com a resposta errada.
+                if (!response.ok || dados.error || !dados.token) {
+                    carregando(false);
+                    inputSenha.value = '';
+                    inputSenha.focus();
+                    mostrarErro(dados.message || dados.error || 'Usuário ou senha inválidos.');
+                    return;
+                }
+
+                SESSION.salvarSessao(dados);
+                if (dados.user?.nome) salvarNomeCache(login, dados.user.nome);
+
+                // 1º acesso: troca a senha provisória antes de entrar
+                if (dados.senha_provisoria) {
+                    window.location.href = '/primeiro-acesso.html';
+                    return;
+                }
+
+                // As equipes vêm do servidor (escopo COORDENADOR/SUPERVISOR só
+                // vira código de equipe consultando o ORGANOGRAMA).
+                await SESSION.carregarEquipes();
+
+                const equipe = SESSION.resolverEquipe();
+                const destino = equipe ? '/sistema-pedidos.html' : '/escolher-equipe.html';
+
+                mostrarOverlayEntrada(() => { window.location.href = destino; });
+
+            } catch (err) {
+                carregando(false);
+                mostrarErro('Falha de conexão. Tente novamente.');
+            }
+        });
+
+        // ==========================================
+        // OVERLAY DE ENTRADA — as mudas sendo regadas
+        // ==========================================
+        const MUDA_POSICOES = [8, 24, 40, 56, 72, 88];
+
+        function mudaSVG(delay) {
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', '0 0 16 18');
+            svg.setAttribute('class', 'entrada-muda');
+            svg.setAttribute('aria-hidden', 'true');
+            svg.style.animationDelay = `${delay}s`;
+            svg.innerHTML = `
+                <path d="M8 17 V6" stroke="#EAF1E8" stroke-width="1.4" stroke-linecap="round" fill="none" />
+                <ellipse cx="4.6" cy="6.5" rx="3.1" ry="2.1" fill="#8FD4C6" transform="rotate(-35 4.6 6.5)" />
+                <ellipse cx="11.4" cy="6.5" rx="3.1" ry="2.1" fill="#8FD4C6" transform="rotate(35 11.4 6.5)" />
+                <ellipse cx="5.6" cy="1.8" rx="2.6" ry="1.8" fill="#A8E0D2" transform="rotate(-20 5.6 1.8)" />
+                <ellipse cx="10.4" cy="1.8" rx="2.6" ry="1.8" fill="#A8E0D2" transform="rotate(20 10.4 1.8)" />`;
+            return svg;
+        }
+
+        function mostrarOverlayEntrada(aoTerminar) {
+            const overlay = document.createElement('div');
+            overlay.className = 'entrada-overlay';
+
+            const cena = document.createElement('div');
+            cena.className = 'entrada-cena';
+
+            const solo = document.createElement('div');
+            solo.className = 'entrada-solo';
+            cena.appendChild(solo);
+
+            MUDA_POSICOES.forEach((pos, i) => {
+                const slot = document.createElement('div');
+                slot.className = 'entrada-muda-slot';
+                slot.style.left = `${pos}%`;
+                // cada muda brota quando a marca chega perto dela
+                slot.appendChild(mudaSVG(0.35 + i * 0.55));
+                cena.appendChild(slot);
+            });
+
+            const marca = document.createElement('div');
+            marca.className = 'entrada-marca';
+            marca.innerHTML = `
+                <img src="/assets/larsil-marca.png" alt="" class="entrada-marca-img">
+                <svg viewBox="0 0 40 30" class="entrada-pingos-svg" aria-hidden="true">
+                    <g class="entrada-pingos">
+                        <circle cx="10" cy="4" r="1.6" fill="#6FCF7B" />
+                        <circle cx="20" cy="8" r="1.4" fill="#6FCF7B" />
+                        <circle cx="30" cy="3" r="1.3" fill="#6FCF7B" />
+                    </g>
+                </svg>`;
+            cena.appendChild(marca);
+
+            const legenda = document.createElement('p');
+            legenda.className = 'entrada-legenda';
+            legenda.textContent = 'Preparando seus pedidos…';
+
+            overlay.append(cena, legenda);
+            document.body.appendChild(overlay);
+
+            // Segura até a marca completar a passagem regando as mudas (~3,4s)
+            setTimeout(aoTerminar, 3400);
+        }
+
+        // ==========================================
+        // INSTALAÇÃO DO PWA
+        // ==========================================
+        let promptInstalacao = null;
+
+        function ehIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream; }
+        function jaInstalado() {
+            return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+        }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            promptInstalacao = e;
+            document.getElementById('instalarCaixa').classList.add('mostrar');
+        });
+
+        document.getElementById('btnInstalar').addEventListener('click', async () => {
+            if (!promptInstalacao) return;
+            promptInstalacao.prompt();
+            await promptInstalacao.userChoice;
+            promptInstalacao = null;
+            document.getElementById('instalarCaixa').classList.remove('mostrar');
+        });
+
+        if (!jaInstalado() && ehIOS()) {
+            document.getElementById('iosCaixa').classList.add('mostrar');
+        }
+
+        // ==========================================
+        // LIMPAR DADOS — saída de emergência quando o cache trava o app
+        // ==========================================
+        const caixaConfirma = document.getElementById('confirmaLimpar');
+
+        document.getElementById('btnLimpar').addEventListener('click', () => {
+            caixaConfirma.hidden = !caixaConfirma.hidden;
+        });
+        document.getElementById('btnLimparNao').addEventListener('click', () => {
+            caixaConfirma.hidden = true;
+        });
+
+        document.getElementById('btnLimparSim').addEventListener('click', async () => {
+            caixaConfirma.hidden = true;
+
+            try { localStorage.clear(); } catch {}
+            try { sessionStorage.clear(); } catch {}
+            document.cookie.split(';').forEach(c => {
+                document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/');
+            });
+            if ('caches' in window) {
+                const nomes = await caches.keys();
+                await Promise.all(nomes.map(n => caches.delete(n)));
+            }
+            if ('serviceWorker' in navigator) {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(regs.map(r => r.unregister()));
+            }
+            window.location.href = '/login.html?limpo=' + Date.now();
+        });
+    </script>
+</body>
+</html>

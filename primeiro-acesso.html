@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0F251D">
+    <title>Primeiro acesso - Refeições Larsil</title>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icone-32.png">
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/icone-64.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/icone-180.png">
+    <link rel="manifest" href="/manifest.json">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/theme.css">
+    <link rel="stylesheet" href="/assets/login.css">
+    <script src="/assets/session.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--lar-bg-1);
+            color: var(--lar-text);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Medidor de força — resposta imediata enquanto a pessoa digita */
+        .forca { margin-top: 8px; }
+        .forca-barra {
+            height: 4px;
+            border-radius: 999px;
+            background: rgba(234, 241, 232, 0.12);
+            overflow: hidden;
+        }
+        .forca-barra i {
+            display: block;
+            height: 100%;
+            width: 0;
+            border-radius: 999px;
+            background: var(--lar-red);
+            transition: width var(--t) var(--ease), background var(--t);
+        }
+        .forca-texto {
+            font-size: 10.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: var(--lar-soft);
+            margin-top: 5px;
+        }
+
+        .dica-confere {
+            font-size: 11.5px;
+            font-weight: 600;
+            margin-top: 6px;
+            display: none;
+        }
+        .dica-confere.mostrar { display: block; animation: larSobe .2s var(--ease) both; }
+        .dica-ok  { color: var(--lar-green); }
+        .dica-nao { color: var(--lar-red-claro); }
+    </style>
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-card">
+            <img src="/assets/larsil-logo.png" alt="Larsil Serviços Florestais" class="login-logo">
+            <p class="login-eyebrow">Primeiro acesso</p>
+
+            <p class="login-intro">
+                Sua senha atual é provisória. Defina uma senha própria e confirme
+                seus contatos para continuar.
+            </p>
+
+            <form id="formOnboarding" novalidate>
+                <div class="login-field">
+                    <label class="login-label" for="novaSenha">Nova senha</label>
+                    <div class="login-input-row" style="position: relative;">
+                        <input id="novaSenha" class="login-input" type="password"
+                               placeholder="mínimo 6 caracteres" autocomplete="new-password"
+                               style="padding-right: 44px;">
+                        <button type="button" id="togglePwd" class="login-pwd-toggle" tabindex="-1" aria-label="Mostrar senha">👁</button>
+                    </div>
+                    <div class="forca">
+                        <div class="forca-barra"><i id="forcaBarra"></i></div>
+                        <div class="forca-texto" id="forcaTexto">&nbsp;</div>
+                    </div>
+                </div>
+
+                <div class="login-field">
+                    <label class="login-label" for="confirmarSenha">Confirmar senha</label>
+                    <div class="login-input-row">
+                        <input id="confirmarSenha" class="login-input" type="password"
+                               placeholder="repita a senha" autocomplete="new-password">
+                    </div>
+                    <div class="dica-confere" id="dicaConfere"></div>
+                </div>
+
+                <div class="login-field">
+                    <label class="login-label" for="email">E-mail</label>
+                    <div class="login-input-row">
+                        <input id="email" class="login-input" type="email"
+                               placeholder="voce@larsil.com.br" autocomplete="email"
+                               autocapitalize="none" spellcheck="false">
+                    </div>
+                </div>
+
+                <div class="login-field">
+                    <label class="login-label" for="telefone">Telefone</label>
+                    <div class="login-input-row">
+                        <input id="telefone" class="login-input" type="tel"
+                               placeholder="(00) 00000-0000" autocomplete="tel" inputmode="numeric">
+                    </div>
+                </div>
+
+                <div id="erroBox" class="login-error" style="display: none;"></div>
+
+                <button type="submit" id="btnSalvar" class="login-submit">
+                    <span id="btnIcone">✓</span>
+                    <span id="btnTexto">Concluir e entrar</span>
+                </button>
+            </form>
+
+            <div class="login-footer">Larsil Serviços Florestais</div>
+        </div>
+    </div>
+
+    <script>
+        // Sem sessão aqui não há o que concluir
+        if (!SESSION.getJwt()) window.location.replace('/login.html');
+
+        const form = document.getElementById('formOnboarding');
+        const inputSenha = document.getElementById('novaSenha');
+        const inputConfirmar = document.getElementById('confirmarSenha');
+        const inputTelefone = document.getElementById('telefone');
+        const erroBox = document.getElementById('erroBox');
+        const btn = document.getElementById('btnSalvar');
+        const btnIcone = document.getElementById('btnIcone');
+        const btnTexto = document.getElementById('btnTexto');
+
+        // Pré-preenche com o que a IAM já conhece da pessoa
+        const usuario = SESSION.getUsuario() || {};
+        if (usuario.email) document.getElementById('email').value = usuario.email;
+        if (usuario.telefone) inputTelefone.value = usuario.telefone;
+
+        function mostrarErro(msg) { erroBox.textContent = msg; erroBox.style.display = 'block'; }
+        function esconderErro() { erroBox.style.display = 'none'; }
+        form.addEventListener('input', esconderErro);
+
+        // ==========================================
+        // MOSTRAR/ESCONDER SENHA
+        // ==========================================
+        document.getElementById('togglePwd').addEventListener('click', () => {
+            const mostrando = inputSenha.type === 'text';
+            inputSenha.type = mostrando ? 'password' : 'text';
+            document.getElementById('togglePwd').textContent = mostrando ? '👁' : '🙈';
+        });
+
+        // ==========================================
+        // FORÇA DA SENHA
+        // Só orientação visual — a regra que vale é a da IAM.
+        // ==========================================
+        const NIVEIS = [
+            { texto: 'Muito fraca', cor: '#DC5046', largura: '20%' },
+            { texto: 'Fraca',       cor: '#DC5046', largura: '40%' },
+            { texto: 'Razoável',    cor: '#E8B04B', largura: '60%' },
+            { texto: 'Boa',         cor: '#6FCF7B', largura: '80%' },
+            { texto: 'Forte',       cor: '#6FCF7B', largura: '100%' }
+        ];
+
+        function pontuar(senha) {
+            let p = 0;
+            if (senha.length >= 6) p++;
+            if (senha.length >= 10) p++;
+            if (/[a-z]/.test(senha) && /[A-Z]/.test(senha)) p++;
+            if (/\d/.test(senha)) p++;
+            if (/[^\w\s]/.test(senha)) p++;
+            return Math.min(p, 5);
+        }
+
+        const forcaBarra = document.getElementById('forcaBarra');
+        const forcaTexto = document.getElementById('forcaTexto');
+
+        inputSenha.addEventListener('input', () => {
+            const senha = inputSenha.value;
+            if (!senha) {
+                forcaBarra.style.width = '0';
+                forcaTexto.innerHTML = '&nbsp;';
+            } else {
+                const nivel = NIVEIS[Math.max(pontuar(senha) - 1, 0)];
+                forcaBarra.style.width = nivel.largura;
+                forcaBarra.style.background = nivel.cor;
+                forcaTexto.textContent = nivel.texto;
+                forcaTexto.style.color = nivel.cor;
+            }
+            conferir();
+        });
+
+        // ==========================================
+        // CONFIRMAÇÃO
+        // ==========================================
+        const dicaConfere = document.getElementById('dicaConfere');
+
+        function conferir() {
+            const a = inputSenha.value;
+            const b = inputConfirmar.value;
+            if (!b) { dicaConfere.classList.remove('mostrar'); return; }
+            dicaConfere.classList.add('mostrar');
+            const iguais = a === b;
+            dicaConfere.textContent = iguais ? '✓ As senhas conferem' : '✕ As senhas não conferem';
+            dicaConfere.className = 'dica-confere mostrar ' + (iguais ? 'dica-ok' : 'dica-nao');
+        }
+        inputConfirmar.addEventListener('input', conferir);
+
+        // ==========================================
+        // TELEFONE — máscara (00) 00000-0000
+        // ==========================================
+        inputTelefone.addEventListener('input', () => {
+            const d = inputTelefone.value.replace(/\D/g, '').slice(0, 11);
+            let saida = d;
+            if (d.length > 2) saida = `(${d.slice(0, 2)}) ${d.slice(2)}`;
+            if (d.length > 7) saida = `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+            inputTelefone.value = saida;
+        });
+
+        // ==========================================
+        // ENVIO
+        // ==========================================
+        function carregando(sim) {
+            btn.disabled = sim;
+            btnIcone.className = sim ? 'login-spinner' : '';
+            btnIcone.textContent = sim ? '' : '✓';
+            btnTexto.textContent = sim ? 'Salvando…' : 'Concluir e entrar';
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const novaSenha = inputSenha.value;
+            const confirmar = inputConfirmar.value;
+            const email = document.getElementById('email').value.trim();
+            const telefone = inputTelefone.value.trim();
+
+            if (novaSenha.length < 6) { mostrarErro('A senha precisa ter pelo menos 6 caracteres.'); return; }
+            if (novaSenha !== confirmar) { mostrarErro('As senhas não conferem.'); return; }
+            if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+                mostrarErro('E-mail inválido.'); return;
+            }
+
+            esconderErro();
+            carregando(true);
+
+            try {
+                const response = await SESSION.apiFetch('/api/auth/onboarding', {
+                    method: 'POST',
+                    body: JSON.stringify({ novaSenha, telefone, email })
+                });
+
+                const dados = await response.json().catch(() => ({}));
+
+                if (!response.ok || dados.error) {
+                    carregando(false);
+                    mostrarErro(dados.message || dados.error || 'Não foi possível concluir.');
+                    return;
+                }
+
+                // Mesma resolução do login normal
+                await SESSION.carregarEquipes();
+                const equipe = SESSION.resolverEquipe();
+                window.location.href = equipe ? '/sistema-pedidos.html' : '/escolher-equipe.html';
+
+            } catch (err) {
+                carregando(false);
+                mostrarErro(err && err.offline
+                    ? 'Sem conexão. Conecte-se para concluir o primeiro acesso.'
+                    : 'Falha de conexão. Tente novamente.');
+            }
+        });
+    </script>
+</body>
+</html>

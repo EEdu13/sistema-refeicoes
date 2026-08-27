@@ -1,0 +1,829 @@
+/* ==========================================================================
+   theme.css — Design system Larsil aplicado ao Sistema de Refeições.
+
+   Mesma paleta e mesma assinatura visual do Painel PCP e do Sistema de
+   Justificativas: verde floresta escuro, superfícies de vidro, Inter.
+   Os três sistemas precisam parecer um só.
+
+   Diferença deste projeto: ele é um PWA usado no campo, no celular, muitas
+   vezes sob sol forte e com uma mão só. Por isso os alvos de toque são
+   maiores e os contrastes um pouco mais duros que no painel de mesa.
+   ========================================================================== */
+
+:root {
+    /* --------------------------------------------------------------
+       Paleta Larsil — idêntica ao PCP/Justificativas
+       -------------------------------------------------------------- */
+    --lar-bg-1: #0F251D;
+    --lar-bg-2: #143026;
+    --lar-bg-3: #17392B;
+
+    --lar-surface: rgba(30, 70, 54, 0.55);
+    --lar-surface-2: rgba(10, 26, 20, 0.45);
+    --lar-surface-3: rgba(10, 26, 20, 0.68);
+
+    --lar-line: rgba(234, 241, 232, 0.14);
+    --lar-line-forte: rgba(234, 241, 232, 0.22);
+
+    --lar-green: #6FCF7B;
+    --lar-green-escuro: #4FA85C;
+    --lar-text: #EAF1E8;
+    --lar-muted: #A9C1AC;
+    --lar-soft: #7C9484;
+
+    /* Acentos de estado (usados com parcimônia — o verde é o protagonista) */
+    --lar-amber: #E8B04B;
+    --lar-red: #DC5046;
+    --lar-red-claro: #F3B4AC;
+    --lar-blue: #5AA9E6;
+
+    /* Texto de maior contraste sobre a superfície atual.
+       Existe porque o valor certo muda entre o tema escuro e o claro —
+       antes estava cravado como #FFFFFF em dezenas de regras. */
+    --lar-forte: #FFFFFF;
+
+    /* Superfícies que flutuam sobre o conteúdo (folhas, gavetas, popups) */
+    --lar-painel: #163A2C;
+    --lar-painel-translucido: rgba(16, 40, 31, 0.92);
+
+    /* Véu escuro atrás do que flutua */
+    --lar-veu: rgba(2, 12, 8, 0.80);
+
+    /* Fundo da página: o mesmo gradiente do painel */
+    --lar-fundo: radial-gradient(1200px 800px at 15% -10%, #1E4636 0%, transparent 60%),
+                 linear-gradient(160deg, var(--lar-bg-1) 0%, var(--lar-bg-2) 55%, var(--lar-bg-3) 100%);
+
+    /* --------------------------------------------------------------
+       Layout
+       -------------------------------------------------------------- */
+    --raio-sm: 9px;
+    --raio-md: 12px;
+    --raio-lg: 16px;
+    --raio-xl: 20px;
+
+    --sombra-card: 0 24px 60px -24px rgba(0, 0, 0, 0.6);
+    --sombra-flutuante: 0 30px 80px -20px rgba(0, 0, 0, 0.55);
+
+    /* Alvo de toque mínimo confortável no celular */
+    --toque: 48px;
+
+    /* --------------------------------------------------------------
+       Movimento — uma curva só, para o sistema inteiro ter o mesmo "peso"
+       -------------------------------------------------------------- */
+    --ease: cubic-bezier(.2, .9, .3, 1);
+    --ease-suave: cubic-bezier(.2, .8, .2, 1);
+    --t-rapida: .15s;
+    --t: .25s;
+    --t-lenta: .45s;
+}
+
+html {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%;
+}
+
+/* Foco visível em tudo que é interativo — obrigatório para acessibilidade */
+:focus-visible {
+    outline: 2px solid var(--lar-green);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* Barras de rolagem discretas no tema escuro.
+   Escopo em html/body e nos containers que realmente rolam — o seletor `*`
+   pintava barra em todo elemento e o navegador desenhava faixas coloridas
+   soltas na borda da tela. */
+html, body, .rolagem {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(234, 241, 232, 0.22) transparent;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+.rolagem::-webkit-scrollbar { width: 8px; height: 8px; }
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb,
+.rolagem::-webkit-scrollbar-thumb {
+    background: rgba(234, 241, 232, 0.22);
+    border-radius: 8px;
+}
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
+.rolagem::-webkit-scrollbar-track { background: transparent; }
+
+/* Nada deve criar rolagem horizontal no celular.
+   `clip` e não `hidden`: hidden transforma o body em container de rolagem e
+   quebra o position:sticky do cabeçalho e da barra de ação. */
+html, body { max-width: 100%; overflow-x: clip; }
+
+/* ==========================================================================
+   ANIMAÇÕES COMPARTILHADAS
+   Um vocabulário pequeno, usado em todo o sistema. Se uma tela precisar de
+   um movimento novo, ele entra aqui — não solto dentro da tela.
+   ========================================================================== */
+
+@keyframes larFadeIn   { from { opacity: 0; } to { opacity: 1; } }
+@keyframes larFadeOut  { from { opacity: 1; } to { opacity: 0; } }
+
+@keyframes larCardIn {
+    from { opacity: 0; transform: translateY(10px) scale(.98); }
+    to   { opacity: 1; transform: none; }
+}
+
+@keyframes larSobe {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: none; }
+}
+
+@keyframes larPop {
+    from { opacity: 0; transform: scale(.5); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes larGira { to { transform: rotate(360deg); } }
+
+@keyframes larPulsa {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: .45; }
+}
+
+@keyframes larBrilho {
+    0%   { background-position: -200% 0; }
+    100% { background-position:  200% 0; }
+}
+
+/* Entrada escalonada de listas/cards. Aplique .lar-cascata no container. */
+.lar-cascata > * { animation: larSobe .42s var(--ease-suave) both; }
+.lar-cascata > *:nth-child(1) { animation-delay: .04s; }
+.lar-cascata > *:nth-child(2) { animation-delay: .09s; }
+.lar-cascata > *:nth-child(3) { animation-delay: .14s; }
+.lar-cascata > *:nth-child(4) { animation-delay: .19s; }
+.lar-cascata > *:nth-child(5) { animation-delay: .24s; }
+.lar-cascata > *:nth-child(n+6) { animation-delay: .28s; }
+
+/* Skeleton de carregamento */
+.lar-skeleton {
+    background: linear-gradient(90deg,
+        rgba(234, 241, 232, 0.06) 0%,
+        rgba(234, 241, 232, 0.16) 50%,
+        rgba(234, 241, 232, 0.06) 100%);
+    background-size: 200% 100%;
+    animation: larBrilho 1.4s infinite linear;
+    border-radius: var(--raio-sm);
+}
+
+/* Spinner padrão */
+.lar-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(234, 241, 232, 0.25);
+    border-top-color: var(--lar-green);
+    border-radius: 50%;
+    animation: larGira .6s linear infinite;
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
+   TRANSIÇÃO ENTRE TELAS
+   O app é uma página só que troca de "tela". Sem transição, a troca parece
+   um salto. Estas classes dão a mesma sensação de navegação nativa.
+   ========================================================================== */
+.lar-tela {
+    animation: larSobe .32s var(--ease) both;
+}
+.lar-tela.lar-saindo {
+    animation: larFadeOut .18s ease-in both;
+}
+
+/* ==========================================================================
+   COMPONENTES BASE
+   ========================================================================== */
+
+/* --- Cartão de vidro --------------------------------------------------- */
+.lar-card {
+    background: var(--lar-surface);
+    border: 1px solid var(--lar-line);
+    border-radius: var(--raio-xl);
+    box-shadow: var(--sombra-card);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+/* --- Campos ------------------------------------------------------------ */
+.lar-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--lar-muted);
+    margin-bottom: .45rem;
+}
+
+.lar-input {
+    width: 100%;
+    min-height: var(--toque);
+    border-radius: 11px;
+    padding: 0 14px;
+    background: var(--lar-surface-2);
+    border: 1px solid rgba(234, 241, 232, 0.18);
+    color: var(--lar-text);
+    /* 16px evita o zoom automático do iOS ao focar o campo */
+    font-size: 16px;
+    font-family: inherit;
+    transition: border-color var(--t-rapida), background var(--t-rapida), box-shadow var(--t-rapida);
+}
+.lar-input::placeholder { color: var(--lar-soft); }
+.lar-input:focus {
+    outline: none;
+    border-color: var(--lar-green);
+    background: var(--lar-surface-3);
+    box-shadow: 0 0 0 3px rgba(111, 207, 123, 0.14);
+}
+.lar-input:disabled { opacity: .55; }
+
+textarea.lar-input { padding: 12px 14px; line-height: 1.5; resize: vertical; }
+
+/* Select com seta própria (o nativo no Android/iOS destoa do tema) */
+select.lar-input {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 40px;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A9C1AC' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 13px center;
+    background-size: 18px;
+}
+select.lar-input option { background: var(--lar-bg-2); color: var(--lar-text); }
+
+/* --- Botões ------------------------------------------------------------ */
+.lar-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: var(--toque);
+    padding: 0 18px;
+    border-radius: var(--raio-md);
+    border: 1px solid var(--lar-line);
+    background: var(--lar-surface-2);
+    color: var(--lar-text);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--t-rapida), border-color var(--t-rapida),
+                transform .1s, filter var(--t-rapida);
+}
+.lar-btn:hover:not(:disabled) { background: rgba(30, 70, 54, 0.7); border-color: var(--lar-line-forte); }
+.lar-btn:active:not(:disabled) { transform: scale(.985); }
+.lar-btn:disabled { opacity: .5; cursor: default; }
+
+.lar-btn-primario {
+    background: var(--lar-green);
+    border-color: var(--lar-green);
+    color: var(--lar-bg-1);
+    font-weight: 800;
+}
+.lar-btn-primario:hover:not(:disabled) { background: var(--lar-green); filter: brightness(1.07); }
+
+.lar-btn-perigo {
+    background: rgba(220, 80, 70, 0.16);
+    border-color: rgba(220, 80, 70, 0.34);
+    color: var(--lar-red-claro);
+}
+.lar-btn-perigo:hover:not(:disabled) { background: rgba(220, 80, 70, 0.26); }
+
+.lar-btn-bloco { width: 100%; }
+
+/* --- Avisos ------------------------------------------------------------ */
+.lar-erro {
+    background: rgba(220, 80, 70, 0.14);
+    border: 1px solid rgba(220, 80, 70, 0.3);
+    color: var(--lar-red-claro);
+    font-size: 12.5px;
+    line-height: 1.5;
+    border-radius: 10px;
+    padding: 10px 12px;
+    animation: larSobe .22s var(--ease) both;
+}
+
+.lar-aviso {
+    background: rgba(232, 176, 75, 0.12);
+    border: 1px solid rgba(232, 176, 75, 0.28);
+    color: #F0D49A;
+    font-size: 12.5px;
+    line-height: 1.5;
+    border-radius: 10px;
+    padding: 10px 12px;
+}
+
+/* --- Selo / pílula ----------------------------------------------------- */
+.lar-selo {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 11px;
+    border-radius: 999px;
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line);
+    color: var(--lar-muted);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    white-space: nowrap;
+}
+.lar-selo-verde { background: rgba(111, 207, 123, 0.14); border-color: rgba(111, 207, 123, 0.32); color: var(--lar-green); }
+.lar-selo-ambar { background: rgba(232, 176, 75, 0.14); border-color: rgba(232, 176, 75, 0.3); color: var(--lar-amber); }
+.lar-selo-vermelho { background: rgba(220, 80, 70, 0.16); border-color: rgba(220, 80, 70, 0.32); color: var(--lar-red-claro); }
+
+/* ==========================================================================
+   TOASTS — substituem os alert() bloqueantes
+   ========================================================================== */
+/* Rodapé, não topo: em cima o aviso tapava o cabeçalho e a equipe ativa,
+   e ainda ficava longe do polegar de quem precisa lê-lo e seguir. */
+.lar-toasts {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    z-index: 4000;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 8px;
+    width: min(440px, calc(100vw - 24px));
+    pointer-events: none;
+}
+
+.lar-toast {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: var(--raio-md);
+    background: rgba(15, 37, 29, 0.94);
+    border: 1px solid var(--lar-line-forte);
+    box-shadow: var(--sombra-flutuante);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: var(--lar-text);
+    font-size: 13.5px;
+    line-height: 1.45;
+    pointer-events: auto;
+    animation: larSobe .3s var(--ease) both;
+}
+.lar-toast.lar-saindo { animation: larFadeOut .24s ease-in both; }
+/* Entra subindo do rodapé */
+.lar-toast { animation: larSobe .3s var(--ease) both; }
+.lar-toast-icone { font-size: 16px; line-height: 1.2; flex-shrink: 0; }
+.lar-toast-ok      { border-left: 3px solid var(--lar-green); }
+.lar-toast-erro    { border-left: 3px solid var(--lar-red); }
+.lar-toast-aviso   { border-left: 3px solid var(--lar-amber); }
+.lar-toast-info    { border-left: 3px solid var(--lar-blue); }
+
+/* ==========================================================================
+   AVATARES E FOTOS
+   Cultura Larsil: sempre mostrar a foto das pessoas.
+   A foto é resolvida pelo Painel PCP por nome (ver assets/session.js).
+   ========================================================================== */
+.avatar-foto {
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--lar-surface-2);
+    border: 1px solid var(--lar-line-forte);
+    color: var(--lar-muted);
+    font-weight: 800;
+    font-size: 11px;
+    line-height: 1;
+    vertical-align: middle;
+    user-select: none;
+}
+.avatar-foto img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;   /* enquadra o rosto, não o meio da foto */
+    display: block;
+}
+.avatar-clicavel { cursor: zoom-in; transition: transform var(--t-rapida), box-shadow var(--t-rapida); }
+.avatar-clicavel:hover { transform: scale(1.1); box-shadow: 0 0 0 2px var(--lar-green); }
+
+.foto-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    background: rgba(2, 6, 23, 0.88);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    cursor: zoom-out;
+    animation: larFadeIn .18s ease-out both;
+}
+.foto-lightbox-caixa {
+    max-width: min(520px, 92vw);
+    text-align: center;
+    animation: larPop .22s var(--ease) both;
+}
+.foto-lightbox-caixa img {
+    max-width: 100%;
+    max-height: 74vh;
+    border-radius: var(--raio-lg);
+    box-shadow: var(--sombra-card);
+    display: block;
+    margin: 0 auto;
+}
+.foto-lightbox-nome {
+    margin-top: 14px;
+    color: var(--lar-text);
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: .02em;
+}
+
+/* ==========================================================================
+   RESPEITAR PREFERÊNCIA DE MOVIMENTO REDUZIDO
+   Fica por último para vencer qualquer animação declarada acima.
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ==========================================================================
+   TEMA CLARO — telas de trabalho
+
+   O app é operado no campo, sob sol. Tela escura vira espelho lá fora: o
+   contraste que parece elegante no escritório desaparece. O login segue no
+   verde escuro, porque é o momento de marca e dura segundos; as telas de
+   trabalho, que duram o dia inteiro, ficam claras.
+
+   O verde da marca continua presente — só muda de papel. No escuro ele era
+   a luz; aqui ele é o acento, e por isso escurece: verde-menta sobre branco
+   não tem contraste suficiente para texto.
+   ========================================================================== */
+body.tema-claro {
+    --lar-bg-1: #EDF0EA;
+    --lar-bg-2: #F4F6F1;
+    --lar-bg-3: #FFFFFF;
+
+    --lar-surface: #FFFFFF;
+    --lar-surface-2: #F2F5EF;
+    --lar-surface-3: #E8EDE4;
+
+    --lar-line: rgba(20, 48, 38, 0.12);
+    --lar-line-forte: rgba(20, 48, 38, 0.22);
+
+    /* Verde escurecido: o menta original some sobre branco */
+    --lar-green: #1E7A47;
+    --lar-green-escuro: #145E37;
+
+    /* Escuros de proposito. A escala "texto forte / normal / secundario"
+       herdada do tema escuro nao serve aqui: no papel, sob sol e para quem
+       tem 50+, cinza medio simplesmente nao e lido. A hierarquia passa a ser
+       feita por TAMANHO e PESO, nao por clareza da tinta. */
+    --lar-text: #16211B;
+    --lar-forte: #0A130E;
+    --lar-muted: #263329;
+    --lar-soft: #3B4A41;
+
+    --lar-amber: #B87708;
+    --lar-red: #C0392B;
+    --lar-red-claro: #A5382C;
+    --lar-blue: #1F6FA8;
+
+    /* Papel levemente esverdeado: continua Larsil, sem o peso do escuro */
+    --lar-fundo: radial-gradient(1100px 700px at 12% -8%, #FFFFFF 0%, transparent 62%),
+                 linear-gradient(170deg, #EDF0EA 0%, #F3F6F0 55%, #E9EEE6 100%);
+
+    --lar-painel: #FFFFFF;
+    --lar-painel-translucido: rgba(255, 255, 255, 0.96);
+    --lar-veu: rgba(20, 38, 30, 0.42);
+
+    /* Sombras no claro precisam ser sutis: as do escuro viram borrão cinza */
+    --sombra-card: 0 2px 8px rgba(20, 48, 38, 0.07), 0 12px 28px -18px rgba(20, 48, 38, 0.18);
+    --sombra-flutuante: 0 8px 20px rgba(20, 48, 38, 0.10), 0 28px 60px -24px rgba(20, 48, 38, 0.28);
+
+    color: var(--lar-text);
+}
+
+/* O cartão PAGCORP continua escuro: é um cartão de verdade, e o contraste
+   com o papel claro é justamente o que o faz parecer um. */
+body.tema-claro .cartao {
+    background: linear-gradient(135deg, #1B5E3C 0%, #0F3A26 55%, #133F2C 100%);
+    border-color: rgba(15, 58, 38, 0.3);
+}
+body.tema-claro .cartao-marca { color: #8FD4A0; }
+body.tema-claro .cartao-numero,
+body.tema-claro .cartao-valor { color: #FFFFFF; }
+body.tema-claro .cartao-rotulo { color: rgba(207, 224, 212, .75); }
+
+/* Botão principal: verde cheio com texto branco (no escuro era o inverso) */
+body.tema-claro .btn-primary,
+body.tema-claro .btn-success,
+body.tema-claro .login-submit,
+body.tema-claro .lar-btn-primario {
+    background: #1E7A47;
+    border-color: #1E7A47;
+    color: #FFFFFF;
+}
+body.tema-claro .btn-success:hover:not(:disabled),
+body.tema-claro .btn-primary:hover:not(:disabled) { background: #1A6B3E; }
+
+/* Estados marcados: fundo suave, texto escuro — no claro, preenchimento
+   forte em item de lista cansa a leitura */
+body.tema-claro .meal-button.selected,
+body.tema-claro .fornecedor-opcao.escolhido,
+body.tema-claro .picker-opcao.marcada,
+body.tema-claro .equipe-linha.ativa {
+    background: rgba(30, 122, 71, 0.10);
+    border-color: #1E7A47;
+}
+body.tema-claro .meal-button.selected .meal-text { color: #145E37; }
+
+body.tema-claro .temp-aba.ativa,
+body.tema-claro .hora-sugerida.ativa {
+    background: #1E7A47;
+    color: #FFFFFF;
+}
+
+body.tema-claro .topbar-equipe {
+    background: rgba(30, 122, 71, 0.10);
+    border-color: rgba(30, 122, 71, 0.35);
+    color: #14432B;
+}
+body.tema-claro .topbar-equipe-lider { color: #55665C; }
+
+body.tema-claro .employee-item input[type="checkbox"] {
+    background: #FFFFFF;
+    border-color: rgba(20, 48, 38, 0.28);
+}
+body.tema-claro .employee-item input[type="checkbox"]:checked::after {
+    border-color: #FFFFFF;
+}
+
+body.tema-claro .menu-icone,
+body.tema-claro .button-icon,
+body.tema-claro .tipo-card-icone {
+    background: rgba(30, 122, 71, 0.10);
+    border-color: rgba(30, 122, 71, 0.24);
+}
+
+/* Pendências: âmbar precisa escurecer para ler sobre papel */
+body.tema-claro .pending-item {
+    background: rgba(184, 119, 8, 0.08);
+    border-color: rgba(184, 119, 8, 0.32);
+    border-left-color: #B87708;
+}
+body.tema-claro .pending-item h4 { color: #7A4E05; }
+body.tema-claro .pending-item p { color: #8A6420; }
+
+body.tema-claro .menu-badge,
+body.tema-claro .pending-count { background: #B87708; color: #FFFFFF; }
+
+body.tema-claro .cal-dia.tem {
+    background: rgba(184, 119, 8, 0.12);
+    border-color: rgba(184, 119, 8, 0.4);
+    color: #7A4E05;
+}
+body.tema-claro .cal-dia.selecionado { background: #B87708; color: #FFFFFF; }
+
+body.tema-claro .aviso-aprovacao,
+body.tema-claro .hist-sem-foto {
+    background: rgba(184, 119, 8, 0.09);
+    border-color: rgba(184, 119, 8, 0.3);
+}
+body.tema-claro .aviso-aprovacao p,
+body.tema-claro .hist-sem-foto { color: #7A4E05; }
+
+body.tema-claro .hist-selo.espera { color: #7A4E05; }
+body.tema-claro .hist-temp {
+    background: rgba(31, 111, 168, 0.08);
+    border-color: rgba(31, 111, 168, 0.26);
+    color: #1B5578;
+}
+
+body.tema-claro .resumo-total {
+    background: rgba(30, 122, 71, 0.09);
+    border-color: rgba(30, 122, 71, 0.32);
+}
+
+body.tema-claro .lar-toast { background: #FFFFFF; }
+
+/* Offline: no claro o app esfria para um papel acinzentado */
+body.tema-claro.offline {
+    --lar-green: #6B7A70;
+    --lar-fundo: linear-gradient(170deg, #EDEEEC 0%, #F2F3F1 55%, #E9EAE8 100%);
+    --lar-surface: #FBFBFA;
+}
+body.tema-claro.offline .rede { color: #55665C; }
+
+/* ==========================================================================
+   CABEÇALHO PARTIDO — tema claro
+
+   O logo da Larsil é branco, então sumia no papel. Em vez de trocar o logo
+   por uma versão escura (o que quebraria a identidade), o cabeçalho ganha um
+   bloco verde só para ele: a marca continua no seu fundo, e a divisão verde
+   e branco vira a assinatura visual da tela de trabalho — mesmo gesto da
+   faixa de terra que o login tem no rodapé.
+   ========================================================================== */
+body.tema-claro .topbar {
+    padding: 0;
+    overflow: hidden;
+    gap: 0;
+    border-color: rgba(20, 48, 38, 0.14);
+}
+
+/* O bloco da marca: verde, com o mesmo gradiente do login */
+body.tema-claro .topbar-logo {
+    height: auto;
+    width: auto;
+    box-sizing: content-box;
+    padding: 13px 18px;
+    background: linear-gradient(135deg, #1B5E3C 0%, #0F3A26 100%);
+    /* A altura do logo em si continua a mesma; o bloco é que cresce */
+    max-height: 30px;
+    align-self: stretch;
+    object-fit: contain;
+    /* Diagonal suave na emenda: corte reto pareceria erro de renderização */
+    clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+    padding-right: 30px;
+}
+
+body.tema-claro .topbar-titulo {
+    padding-left: 4px;
+    color: var(--lar-text);
+}
+
+body.tema-claro .topbar-avatar { margin-right: 13px; }
+
+/* O rodapé é o contrário: fundo verde, para a faixa de contexto se separar
+   do conteúdo e o app fechar com a cor da marca embaixo. */
+body.tema-claro .barra-rodape {
+    background: linear-gradient(135deg, #1B5E3C 0%, #143D2A 100%);
+    border-top-color: rgba(15, 58, 38, 0.4);
+    box-shadow: 0 -10px 26px -16px rgba(20, 48, 38, 0.45);
+}
+body.tema-claro .barra-rodape .topbar-equipe {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: #FFFFFF;
+}
+body.tema-claro .barra-rodape .topbar-equipe-lider { color: rgba(230, 240, 233, 0.85); }
+body.tema-claro .barra-rodape .rede { color: #FFFFFF; }
+body.tema-claro .barra-rodape .rede-ponto { background: #6FCF7B; }
+
+/* O dropdown sobe do rodapé verde: volta a ser painel claro */
+body.tema-claro .equipe-dropdown {
+    background: var(--lar-painel);
+    border-color: var(--lar-line-forte);
+}
+body.tema-claro .equipe-linha-cod { color: #145E37; }
+
+/* ==========================================================================
+   CAMPOS EDITÁVEIS — tema claro
+
+   No escuro, campo era uma área MAIS clara que o fundo: a diferença de
+   luminosidade já dizia "digite aqui". No claro isso se inverte — o fundo já
+   é claro, então repetir a mesma receita deixou os campos quase invisíveis.
+
+   Aqui o sinal é outro: branco puro, borda nítida e uma sombra interna de um
+   pixel. É a convenção que todo mundo reconhece como campo de digitação.
+   ========================================================================== */
+body.tema-claro .form-control,
+body.tema-claro .lar-input,
+body.tema-claro .supplier-input,
+body.tema-claro .price-input,
+body.tema-claro .supplier-select,
+body.tema-claro .seletor,
+body.tema-claro .campo-data,
+body.tema-claro .picker-busca {
+    background: #FFFFFF;
+    border: 1.5px solid rgba(20, 48, 38, 0.22);
+    box-shadow: inset 0 1px 2px rgba(20, 48, 38, 0.06);
+    color: var(--lar-text);
+}
+
+body.tema-claro .form-control::placeholder,
+body.tema-claro .lar-input::placeholder,
+body.tema-claro .picker-busca::placeholder {
+    color: #5F6E65;
+}
+
+/* Foco: o verde da marca contornando o campo, sem mudar a cor do papel */
+body.tema-claro .form-control:focus,
+body.tema-claro .lar-input:focus,
+body.tema-claro .supplier-input:focus,
+body.tema-claro .price-input:focus,
+body.tema-claro .picker-busca:focus,
+body.tema-claro .campo-data:focus-within {
+    background: #FFFFFF;
+    border-color: #1E7A47;
+    box-shadow: 0 0 0 3px rgba(30, 122, 71, 0.16);
+    outline: none;
+}
+
+/* Campo só de leitura precisa parecer diferente de campo vazio */
+body.tema-claro .form-control[readonly] {
+    background: #F0F3EE;
+    border-style: dashed;
+    color: var(--lar-muted);
+    box-shadow: none;
+}
+
+body.tema-claro .form-control.faltando {
+    border-color: #B87708;
+    box-shadow: 0 0 0 3px rgba(184, 119, 8, 0.16);
+}
+
+/* Textarea: a alça de redimensionar some no branco sem uma borda mais firme */
+body.tema-claro textarea.form-control { border-color: rgba(20, 48, 38, 0.24); }
+
+/* Botões neutros também estavam sumindo: ganham contorno próprio */
+body.tema-claro .btn:not(.btn-success):not(.btn-primary):not(.btn-danger):not(.btn-problem):not(.btn-whatsapp) {
+    background: #FFFFFF;
+    border: 1.5px solid rgba(20, 48, 38, 0.2);
+    color: var(--lar-text);
+    box-shadow: 0 1px 2px rgba(20, 48, 38, 0.05);
+}
+body.tema-claro .btn:not(.btn-success):not(.btn-primary):hover:not(:disabled) {
+    background: #F4F7F2;
+    border-color: rgba(30, 122, 71, 0.45);
+}
+
+/* A lista de colaboradores é área de conteúdo, não campo: fica no papel */
+body.tema-claro .employees-list,
+body.tema-claro .picker-lista {
+    background: #FFFFFF;
+    border: 1px solid var(--lar-line);
+    box-shadow: none;
+}
+
+/* ==========================================================================
+   TEXTO DE APOIO — tema claro
+   As legendas e ajudas herdavam o cinza do tema escuro e sumiam no papel.
+   Aqui elas ficam praticamente pretas; quem separa título de apoio é o
+   tamanho e o peso, não a clareza da tinta.
+   ========================================================================== */
+body.tema-claro .text-muted,
+body.tema-claro .etapa-ajuda,
+body.tema-claro .menu-sub,
+body.tema-claro .colab-funcao,
+body.tema-claro .hist-meta,
+body.tema-claro .hist-item-conta,
+body.tema-claro .hist-item-forn,
+body.tema-claro .fornecedor-cidade,
+body.tema-claro .resumo-refeicao-forn,
+body.tema-claro .resumo-refeicao-conta,
+body.tema-claro .pessoa-nome small,
+body.tema-claro .picker-opcao-nome small,
+body.tema-claro .folha-titulo span,
+body.tema-claro .convite-topo span,
+body.tema-claro .quem-login,
+body.tema-claro .cal-legenda,
+body.tema-claro .contador-valor,
+body.tema-claro .resumo-linha span:first-child,
+body.tema-claro .hist-contexto-linha span:first-child,
+body.tema-claro .colab-contagem {
+    color: #263329;
+}
+
+/* Rótulos de campo: pretos e firmes — são a pergunta que a pessoa responde */
+body.tema-claro .form-group label,
+body.tema-claro .login-label,
+body.tema-claro .lar-label,
+body.tema-claro .resumo-secao,
+body.tema-claro .gaveta-secao,
+body.tema-claro .passo-rotulo,
+body.tema-claro .sugestao-titulo.outros,
+body.tema-claro .cidade-cabecalho,
+body.tema-claro .dia-titulo,
+body.tema-claro .cal-nome-dia {
+    color: #16211B;
+}
+
+/* Números e valores: o mais escuro que existe */
+body.tema-claro .contador-valor,
+body.tema-claro .resumo-total-valor,
+body.tema-claro .hist-data strong,
+body.tema-claro .hist-valores strong,
+body.tema-claro .resumo-refeicao-subtotal,
+body.tema-claro .hist-item-valor,
+body.tema-claro .colab-contagem strong {
+    color: #0A130E;
+}
+
+/* Dias fora do mês continuam apagados: ali o apagado É a informação */
+body.tema-claro .cal-dia.fora { color: #8A968F; }
+body.tema-claro .cal-dia { color: #263329; }

@@ -333,9 +333,12 @@ const CacheManager = {
 const DOM = {
     // Inicializar cache de elementos
     init() {
+        // A autenticação saiu daqui (é login.html); as telas abaixo são o app.
         this.screens = {
-            login: document.getElementById('loginScreen'),
             main: document.getElementById('mainScreen'),
+            pending: document.getElementById('pendingScreen'),
+            historico: document.getElementById('historicoScreen'),
+            deposito: document.getElementById('depositoScreen'),
             order: document.getElementById('orderScreen'),
             temperature: document.getElementById('temperatureScreen'),
             problem: document.getElementById('problemScreen')
@@ -374,15 +377,25 @@ const DOM = {
         console.log('✅ Cache DOM inicializado');
     },
     
-    // Helpers para mostrar/esconder telas
+    /**
+     * Mostra uma tela e esconde as demais.
+     * Rola para o topo: sem isso a tela nova abre na altura em que a anterior
+     * estava, e a pessoa acha que o app travou.
+     */
     showScreen(screenName) {
         Object.values(this.screens).forEach(screen => {
             if (screen) screen.classList.add('hidden');
         });
-        
-        if (this.screens[screenName]) {
-            this.screens[screenName].classList.remove('hidden');
+
+        const alvo = this.screens[screenName];
+        if (alvo) {
+            alvo.classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
+
+        // Deixa a tela atual no <body> para o CSS poder enxugar o cabeçalho
+        // onde ele não serve (ex.: pendências, que só precisa do filtro).
+        document.body.classList.toggle('tela-pendencias', screenName === 'pending');
     }
 };
 

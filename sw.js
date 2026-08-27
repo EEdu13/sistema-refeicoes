@@ -4,11 +4,21 @@ console.log('🚀 Service Worker carregado');
 // 🎯 CACHE PARA PERSISTÊNCIA DE LOGIN iOS PWA
 let loginDataCache = null;
 
-const CACHE_NAME = 'refeicoes-pwa-v4'; // 🔥 v4.0.0 - ATUALIZAÇÃO OBRIGATÓRIA (FECHAMENTO corrigido)
+const CACHE_NAME = 'refeicoes-pwa-v7'; // 🌲 v5.0.1 — cache HTTP do CSS/JS parava de pegar edição nova
 const urlsToCache = [
+    '/login.html',
+    '/escolher-equipe.html',
+    '/primeiro-acesso.html',
     '/sistema-pedidos.html',
-    '/js/app-modules.js', // 🎯 NOVO ARQUIVO
-    '/api/teste-conexao',
+    '/assets/theme.css',
+    '/assets/app.css',
+    '/assets/login.css',
+    '/assets/session.js',
+    '/assets/larsil-logo.png',
+    '/assets/larsil-marca.png',
+    '/assets/icone-192.png',
+    '/assets/icone-512.png',
+    '/js/app-modules.js',
     '/manifest.json'
 ];
 
@@ -45,8 +55,8 @@ function showNotification() {
     const options = {
         title: '🍽️ Hora do Pedido de Refeição!',
         body: 'Não esqueça de fazer seu pedido de refeição para amanhã! 😋',
-        icon: '/icon-192x192.png',
-        badge: '/icon-192x192.png',
+        icon: '/assets/icone-192.png',
+        badge: '/assets/icone-192.png',
         tag: 'meal-reminder',
         requireInteraction: true,
         actions: [
@@ -116,17 +126,64 @@ self.addEventListener('activate', event => {
     );
 });
 
-// Interceptar requests
+// ==========================================================================
+// INTERCEPTAÇÃO DE REQUESTS
+//
+// A estratégia antiga era cache-first para TUDO. Era ela que deixava o app
+// preso numa versão antiga — e foi por causa disso que existiu aquele
+// bloqueador de "ATUALIZAÇÃO OBRIGATÓRIA" na tela.
+//
+// Agora:
+//   • HTML, CSS e JS  -> rede primeiro, cache como rede de segurança offline
+//   • imagens/fontes  -> cache primeiro (não mudam e pesam)
+//   • /api            -> nunca cacheia (dado de pedido não pode vir velho)
+// ==========================================================================
+const EXTENSOES_ESTATICAS = /\.(png|jpg|jpeg|svg|gif|webp|woff2?|ttf|ico)$/i;
+
 self.addEventListener('fetch', event => {
-    event.respondWith(
-        caches.match(event.request)
-            .then(response => {
-                // Cache hit - retorna response do cache
-                if (response) {
-                    return response;
+    const req = event.request;
+
+    // Só GET entra em cache; POST de pedido/aferição jamais.
+    if (req.method !== 'GET') return;
+
+    const url = new URL(req.url);
+
+    // Outra origem (fontes do Google, EmailJS, fotos do PCP): deixa passar
+    if (url.origin !== self.location.origin) return;
+
+    // API sempre da rede
+    if (url.pathname.startsWith('/api/')) return;
+
+    // Estáticos pesados: cache primeiro
+    if (EXTENSOES_ESTATICAS.test(url.pathname)) {
+        event.respondWith(
+            caches.match(req).then(cacheado => cacheado || fetch(req).then(resposta => {
+                if (resposta.ok) {
+                    const copia = resposta.clone();
+                    caches.open(CACHE_NAME).then(c => c.put(req, copia));
                 }
-                return fetch(event.request);
+                return resposta;
+            }))
+        );
+        return;
+    }
+
+    // Código e páginas: rede primeiro, com o cache guardando a versão nova
+    event.respondWith(
+        fetch(req)
+            .then(resposta => {
+                if (resposta.ok) {
+                    const copia = resposta.clone();
+                    caches.open(CACHE_NAME).then(c => c.put(req, copia));
+                }
+                return resposta;
             })
+            .catch(() => caches.match(req).then(cacheado => {
+                if (cacheado) return cacheado;
+                // Navegação offline sem cache da rota: cai no app
+                if (req.mode === 'navigate') return caches.match('/sistema-pedidos.html');
+                return new Response('', { status: 504, statusText: 'Offline' });
+            }))
     );
 });
 
@@ -199,8 +256,8 @@ async function processDatabaseQueueBackground() {
             if (successCount > 0) {
                 self.registration.showNotification('✅ Pedidos Enviados', {
                     body: `${successCount} pedido(s) foram enviados automaticamente!`,
-                    icon: '/icon-192x192.png',
-                    badge: '/badge-72x72.png',
+                    icon: '/assets/icone-192.png',
+                    badge: '/assets/icone-192.png',
                     tag: 'pedidos-enviados'
                 });
             }
@@ -271,8 +328,8 @@ async function processTemperaturaQueueBackground() {
             if (successCount > 0) {
                 self.registration.showNotification('🌡️ Aferições Enviadas', {
                     body: `${successCount} aferição(ões) de temperatura foram enviadas automaticamente!`,
-                    icon: '/icon-192x192.png',
-                    badge: '/badge-72x72.png',
+                    icon: '/assets/icone-192.png',
+                    badge: '/assets/icone-192.png',
                     tag: 'temperaturas-enviadas'
                 });
             }

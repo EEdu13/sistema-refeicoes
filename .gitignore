@@ -71,7 +71,13 @@ Thumbs.db
 
 # Logs
 *.log
+# O log do servidor guarda nome, e-mail e telefone de quem usa o app —
+# não pode ir para o repositório.
+server_log.txt
 
 # Arquivos temporários
 *.tmp
 *.temp
+_fila_blob/
+_aprovacoes_pendentes.json
+_telegram.json
