@@ -1,10 +1,39 @@
 // Service Worker para Background Sync e Notificações
 console.log('🚀 Service Worker carregado');
 
+// ==========================================================================
+// ENDEREÇO APOSENTADO
+//
+// No domínio antigo este Service Worker é o que mantém o app "funcionando"
+// do cache — a tela abre, mas nenhuma requisição chega ao servidor e os
+// lançamentos ficam presos na fila. Aqui ele se descadastra e apaga os
+// caches, para parar de servir a versão velha.
+//
+// A página (assets/session.js) é quem cuida da ordem certa: primeiro envia
+// a fila para o endereço novo, só depois limpa e redireciona. Este bloco é
+// a rede de segurança para o caso de o Service Worker acordar sozinho.
+// ==========================================================================
+const HOSTS_APOSENTADOS = ['web-production-e8382.up.railway.app'];
+const ENDERECO_APOSENTADO = HOSTS_APOSENTADOS.includes(self.location.hostname);
+
+if (ENDERECO_APOSENTADO) {
+    console.log('🚚 Endereço aposentado — Service Worker vai se remover');
+    self.addEventListener('install', () => self.skipWaiting());
+    self.addEventListener('activate', event => {
+        event.waitUntil((async () => {
+            const nomes = await caches.keys();
+            await Promise.all(nomes.map(n => caches.delete(n)));
+            await self.registration.unregister();
+            const clientes = await self.clients.matchAll({ type: 'window' });
+            clientes.forEach(c => c.navigate(c.url));   // recarrega já sem SW
+        })());
+    });
+}
+
 // 🎯 CACHE PARA PERSISTÊNCIA DE LOGIN iOS PWA
 let loginDataCache = null;
 
-const CACHE_NAME = 'refeicoes-pwa-v7'; // 🌲 v5.0.1 — cache HTTP do CSS/JS parava de pegar edição nova
+const CACHE_NAME = 'refeicoes-pwa-v8'; // 🌲 v5.1.0 — mudança de endereço + migração da fila
 const urlsToCache = [
     '/login.html',
     '/escolher-equipe.html',
@@ -142,6 +171,12 @@ const EXTENSOES_ESTATICAS = /\.(png|jpg|jpeg|svg|gif|webp|woff2?|ttf|ico)$/i;
 
 self.addEventListener('fetch', event => {
     const req = event.request;
+
+    // No endereço aposentado não servimos NADA do cache: é justamente o
+    // cache que fazia a tela abrir e parecer que estava tudo bem, enquanto
+    // as requisições morriam. Deixando passar direto, a falha fica visível
+    // e a migração (assets/session.js) assume.
+    if (ENDERECO_APOSENTADO) return;
 
     // Só GET entra em cache; POST de pedido/aferição jamais.
     if (req.method !== 'GET') return;

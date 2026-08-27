@@ -44,6 +44,147 @@
     var redirecionando = false;
 
     // ======================================================================
+    // MUDANÇA DE ENDEREÇO
+    //
+    // O app já morou em outro domínio. Como ele é instalável e guarda tudo
+    // para funcionar sem sinal, quem instalou pelo endereço antigo continua
+    // abrindo a tela DO CACHE mesmo depois de o domínio sair do ar — e acha
+    // que está trabalhando normalmente, enquanto nenhuma requisição chega ao
+    // servidor. Os lançamentos vão para a fila e ficam lá.
+    //
+    // Pior: a fila mora no localStorage, que é SEPARADO POR DOMÍNIO. Mandar
+    // essa pessoa para o endereço novo sem mais nem menos apagaria o que ela
+    // lançou. Por isso a migração é nesta ordem, e só avança se a anterior
+    // deu certo:
+    //
+    //   1. envia a fila do aparelho para o endereço ATUAL (CORS liberado)
+    //   2. só então descadastra o Service Worker e limpa os caches
+    //   3. redireciona
+    //
+    // Se a rede falhar no passo 1, nada é apagado: ele tenta de novo na
+    // próxima abertura.
+    // ======================================================================
+    var HOST_ATUAL = 'refeicoes.up.railway.app';
+    var HOSTS_APOSENTADOS = ['web-production-e8382.up.railway.app'];
+
+    function precisaMigrar() {
+        return HOSTS_APOSENTADOS.indexOf(global.location.hostname) !== -1;
+    }
+
+    function avisoMigracao(texto, detalhe) {
+        var caixa = global.document.getElementById('lar-migracao');
+        if (!caixa) {
+            caixa = global.document.createElement('div');
+            caixa.id = 'lar-migracao';
+            caixa.setAttribute('style',
+                'position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;'
+                + 'align-items:center;justify-content:center;gap:10px;padding:28px;text-align:center;'
+                + 'background:#0F251D;color:#EAF1E8;'
+                + "font-family:Inter,-apple-system,'Segoe UI',sans-serif;");
+            global.document.body.appendChild(caixa);
+        }
+        caixa.replaceChildren();
+
+        var t = global.document.createElement('div');
+        t.setAttribute('style', 'font-size:17px;font-weight:800;line-height:1.4;max-width:340px;');
+        t.textContent = texto;
+        caixa.appendChild(t);
+
+        if (detalhe) {
+            var d = global.document.createElement('div');
+            d.setAttribute('style', 'font-size:13.5px;line-height:1.6;color:#9FB3A6;max-width:340px;');
+            d.textContent = detalhe;
+            caixa.appendChild(d);
+        }
+    }
+
+    /** Envia uma fila do localStorage para o endereço novo. Devolve quantos sobraram. */
+    function enviarFila(chave, rota, corpoDoItem) {
+        var fila;
+        try { fila = JSON.parse(global.localStorage.getItem(chave) || '[]'); }
+        catch (e) { fila = []; }
+        if (!fila.length) return Promise.resolve(0);
+
+        var token = '';
+        try { token = global.localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { /* noop */ }
+
+        var cabecalhos = { 'Content-Type': 'application/json' };
+        if (token) cabecalhos['Authorization'] = 'Bearer ' + token;
+
+        var restantes = [];
+        var passo = Promise.resolve();
+
+        fila.forEach(function (item) {
+            passo = passo.then(function () {
+                return fetch('https://' + HOST_ATUAL + rota, {
+                    method: 'POST',
+                    headers: cabecalhos,
+                    body: JSON.stringify(corpoDoItem(item)),
+                })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (d) {
+                        // Guarda o que não foi aceito para tentar de novo depois
+                        if (!d || d.error) restantes.push(item);
+                    })
+                    .catch(function () { restantes.push(item); });
+            });
+        });
+
+        return passo.then(function () {
+            try { global.localStorage.setItem(chave, JSON.stringify(restantes)); } catch (e) { /* noop */ }
+            return restantes.length;
+        });
+    }
+
+    function migrarDeEndereco() {
+        avisoMigracao('O app mudou de endereço',
+            'Estamos enviando o que ficou guardado neste aparelho. Não feche o app.');
+
+        return Promise.all([
+            enviarFila('databaseQueue', '/api/salvar-pedido', function (i) { return i.data || i; }),
+            enviarFila('temperaturaQueue', '/api/afericao-temperatura', function (i) { return i; }),
+        ]).then(function (sobraram) {
+            var pendentes = sobraram[0] + sobraram[1];
+
+            if (pendentes > 0) {
+                // Não apaga nada: o que está no aparelho é a única cópia.
+                avisoMigracao('Ainda falta enviar ' + pendentes + ' lançamento(s)',
+                    'Conecte-se à internet e abra o app de novo por este mesmo link. '
+                    + 'Assim que tudo for enviado, levamos você ao endereço novo.');
+                return;
+            }
+
+            avisoMigracao('Tudo enviado!', 'Levando você para o endereço novo…');
+
+            var limpezas = [];
+            if (global.navigator.serviceWorker) {
+                limpezas.push(global.navigator.serviceWorker.getRegistrations()
+                    .then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); })
+                    .catch(function () { /* noop */ }));
+            }
+            if (global.caches) {
+                limpezas.push(global.caches.keys()
+                    .then(function (ns) { return Promise.all(ns.map(function (n) { return global.caches.delete(n); })); })
+                    .catch(function () { /* noop */ }));
+            }
+
+            return Promise.all(limpezas).then(function () {
+                setTimeout(function () {
+                    global.location.replace('https://' + HOST_ATUAL + '/login.html?migrado=1');
+                }, 1200);
+            });
+        });
+    }
+
+    if (precisaMigrar()) {
+        if (global.document.readyState === 'loading') {
+            global.document.addEventListener('DOMContentLoaded', migrarDeEndereco);
+        } else {
+            migrarDeEndereco();
+        }
+    }
+
+    // ======================================================================
     // PERSISTÊNCIA EM CAMADAS
     //
     // O iOS limpa o localStorage de PWA com alguma agressividade quando o
