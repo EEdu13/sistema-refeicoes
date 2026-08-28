@@ -665,8 +665,11 @@ def _tg_tratar_callback(cb):
 # ==========================================================================
 INTERVALO_RESGATE = 300      # 5 min entre varreduras
 IDADE_MINIMA_RESGATE = 3     # minutos de vida antes de considerar perdido
-DIAS_RESGATE = 3             # não mexe em histórico antigo
 MAX_POR_VARREDURA = 4        # ritmo: não inunda o grupo nem o Telegram
+
+# Só ontem e hoje. Pedido mais velho que isso já foi consumido: reabrir a
+# aprovação dele só encheria o grupo de coisa vencida, sem ajudar o
+# depósito. O que ficou para trás se resolve na mão, olhando a lista.
 
 
 def _resgatar_aprovacoes_perdidas():
@@ -681,7 +684,7 @@ def _resgatar_aprovacoes_perdidas():
         FROM PEDIDOS
         WHERE APROVADO IS NULL
           AND PAGCORP IS NOT NULL AND LTRIM(RTRIM(PAGCORP)) <> ''
-          AND Criado >= DATEADD(day, -{DIAS_RESGATE}, GETDATE())
+          AND Criado >= CAST(DATEADD(day, -1, GETDATE()) AS DATE)
           AND Criado <= DATEADD(minute, -{IDADE_MINIMA_RESGATE}, GETDATE())
         ORDER BY ID
     """, []) or []
