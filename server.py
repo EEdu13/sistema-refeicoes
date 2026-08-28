@@ -609,7 +609,7 @@ def _tg_tratar_callback(cb):
             print(f'❌ Decisão do relatório: {e}', flush=True)
             return
         if info:
-            decisao, equipe, data_iso, fluxo = info
+            decisao, equipe, data_iso, fluxo, ids = info
             # Repinta o relatório: a equipe decidida sai riscada e perde os
             # botões, então dá para ver de relance o que ainda falta.
             msg = cb.get('message') or {}
@@ -618,6 +618,14 @@ def _tg_tratar_callback(cb):
                     target=_repintar_relatorio,
                     args=(chat, msg['message_id'], fluxo, data_iso),
                     daemon=True).start()
+
+            # Quem pediu recebe o aprovado/reprovado no WhatsApp, igual ao
+            # botão do pedido avulso. Em thread porque a Z-API às vezes
+            # demora e isso prenderia a fila de cliques.
+            threading.Thread(
+                target=_avisar_decisao_do_dia,
+                args=(ids, decisao, quem_nome, equipe, data_iso),
+                daemon=True).start()
         return
 
     acao, _, referencia = dado.partition(':')
@@ -860,9 +868,15 @@ def _resgatar_aprovacoes_perdidas():
 
         # Sem isto a decisão cairia no plano B (por horário) — e é aqui que
         # sabemos exatamente quais pedidos entraram nesta mensagem.
+        # Preserva o que já se sabe: o pedido original guardou o telefone
+        # antes de tentar enviar, e sobrescrever com vazio aqui mataria a
+        # devolutiva justamente de quem mais precisa dela.
+        antes = buscar_solicitante(str(min(ids))) or {}
         registrar_solicitante(str(min(ids)), {
-            'login': '', 'nome': base.get('NOME_LIDER') or '',
-            'telefone': '', 'pedidos': ids, 'equipe': lider,
+            'login': antes.get('login') or '',
+            'nome': antes.get('nome') or base.get('NOME_LIDER') or '',
+            'telefone': antes.get('telefone') or '',
+            'pedidos': ids, 'equipe': lider,
         })
 
         reenviados += 1
@@ -1079,19 +1093,68 @@ def _decidir_dia(dado, quem_nome):
     fluxo = FLUXO_FECHAMENTO if inicial == 'F' else FLUXO_PAGCORP
     marca = '%(FECHAMENTO)%' if fluxo == FLUXO_FECHAMENTO else '%(PAGCORP)%'
 
-    # Só o que ainda não foi decidido, e só do fluxo daquele grupo: o
-    # relatório do PAGCORP não pode mexer em pedido de Fechamento.
-    afetados = executar_query("""
-        UPDATE PEDIDOS SET APROVADO = %s, APROVADO_POR = %s
+    # Quais pedidos vão ser tocados. Precisa ser ANTES do UPDATE: depois
+    # eles não são mais 'AGUARDANDO' e o filtro não acha ninguém. É com
+    # esses IDs que se descobre quem avisar no WhatsApp.
+    condicao = """
         WHERE LIDER = %s
           AND CAST(DATA_RETIRADA AS DATE) = CAST(%s AS DATE)
           AND OBSERVACOES LIKE %s
           AND (APROVADO IS NULL OR APROVADO = 'AGUARDANDO')
-    """, [decisao, quem_nome[:100], equipe, data_iso, marca])
+    """
+    alvo = [equipe, data_iso, marca]
+    pendentes = executar_query('SELECT ID FROM PEDIDOS' + condicao, alvo) or []
+    ids = [int(p['ID']) for p in pendentes]
+
+    # Só o que ainda não foi decidido, e só do fluxo daquele grupo: o
+    # relatório do PAGCORP não pode mexer em pedido de Fechamento.
+    afetados = executar_query(
+        'UPDATE PEDIDOS SET APROVADO = %s, APROVADO_POR = %s' + condicao,
+        [decisao, quem_nome[:100]] + alvo)
 
     print(f'📊 {decisao} do dia por {quem_nome}: {afetados} pedido(s) '
-          f'da equipe {equipe} em {data_iso} ({fluxo})', flush=True)
-    return (decisao, equipe, data_iso, fluxo), (afetados or 0)
+          f'da equipe {equipe} em {data_iso} ({fluxo}) {ids}', flush=True)
+    return (decisao, equipe, data_iso, fluxo, ids), (afetados or 0)
+
+
+def _avisar_decisao_do_dia(ids, decisao, quem_nome, equipe, data_iso):
+    """Devolutiva no WhatsApp de quem pediu, para decisão vinda do relatório.
+
+    O botão de cada pedido já avisava o solicitante. O botão do relatório
+    das 8h decide a equipe inteira de uma vez e, sem isto, ninguém ficava
+    sabendo — o líder via o pedido sumir do grupo e continuava no escuro.
+
+    Um lote pode ter vários pedidos e vários lotes podem cair no mesmo
+    clique, então avisa uma vez por pessoa, não uma vez por pedido.
+    """
+    if not ids:
+        return
+
+    restantes = set(ids)
+    with _lock_solicitantes:
+        mapa = dict(_ler_solicitantes())
+
+    # Um telefone só recebe um aviso, mesmo com vários lotes no dia.
+    por_telefone = {}
+    for dados in mapa.values():
+        do_lote = [i for i in (dados.get('pedidos') or []) if int(i) in restantes]
+        if not do_lote:
+            continue
+        telefone = _so_digitos(dados.get('telefone') or '')
+        if telefone:
+            por_telefone.setdefault(telefone, dados)
+        else:
+            print(f'ℹ️ {dados.get("login", "solicitante")} sem telefone na IAM — '
+                  f'devolutiva do relatório não enviada', flush=True)
+
+    data_br = '/'.join(reversed(str(data_iso).split('-')))
+    aviso = ('✅ *Pedido APROVADO*' if decisao == 'APROVADO' else '❌ *Pedido REPROVADO*')
+    aviso += (f'\n\n📅 {data_br}\n👥 Equipe {equipe}\n\n_Resposta de {quem_nome}_')
+
+    for telefone in por_telefone:
+        ok, _ = zapi_enviar_texto(telefone, aviso)
+        print(f'📤 Devolutiva do relatório ({equipe}): '
+              f'{"enviada" if ok else "falhou"}', flush=True)
 
 
 def _worker_relatorio_diario():
@@ -3497,6 +3560,23 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 if resumo.get('motivo'):
                     linhas += ['', f"📝 *Motivo:* {resumo['motivo']}"]
 
+                # Telefone de quem pediu vem da IAM AGORA, com a pessoa
+                # autenticada — não do corpo do webhook lá na frente.
+                #
+                # Registrado ANTES da tentativa de envio de propósito: se o
+                # envio falhar, é o worker de resgate que reenvia depois, e
+                # ele não tem como descobrir telefone (a IAM só resolve por
+                # token, e a essa altura não há sessão). Guardando aqui, a
+                # devolutiva chega mesmo no pedido que precisou ser resgatado.
+                telefone = telefone_do_solicitante(self.usuario)
+                registrar_solicitante(referencia, {
+                    'login': self.usuario.get('login'),
+                    'nome': self.usuario.get('nome'),
+                    'telefone': telefone,
+                    'pedidos': ids,
+                    'equipe': resumo.get('equipe', ''),
+                })
+
                 # A decisão vai pelo Telegram (botões + resposta sem webhook);
                 # o aviso de status continua no WhatsApp, mais adiante.
                 ok, detalhe = telegram_pedir_aprovacao(resumo, ids, fluxo)
@@ -3516,17 +3596,6 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                         executar_query(
                             "UPDATE PEDIDOS SET APROVADO = %s, APROVADO_POR = %s WHERE ID = %s",
                             ['AGUARDANDO', NOME_APROVADOR, int(pid)])
-
-                    # Telefone de quem pediu vem da IAM AGORA, com a pessoa
-                    # autenticada — não do corpo do webhook lá na frente.
-                    telefone = telefone_do_solicitante(self.usuario)
-                    registrar_solicitante(referencia, {
-                        'login': self.usuario.get('login'),
-                        'nome': self.usuario.get('nome'),
-                        'telefone': telefone,
-                        'pedidos': ids,
-                        'equipe': resumo.get('equipe', ''),
-                    })
 
                     # Avisa quem pediu que o pedido está aguardando aprovação —
                     # o mesmo canal (WhatsApp) que depois traz o aprovado/reprovado.
