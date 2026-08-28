@@ -552,8 +552,12 @@ def _tg_tratar_callback(cb):
     quem_nome = ' '.join(filter(None, [quem.get('first_name'), quem.get('last_name')])) \
         or quem.get('username') or 'Desconhecido'
 
-    # 1. A decisão tem de vir do chat registrado
-    if chat != str(telegram_chat_aprovador()):
+    # 1. A decisão tem de vir de um dos grupos registrados (PAGCORP ou
+    #    Fechamento). Cada mensagem já carrega o fluxo dela, então basta o
+    #    chat ser um dos dois.
+    autorizados = {str(telegram_chat_do_fluxo(f))
+                   for f in (FLUXO_PAGCORP, FLUXO_FECHAMENTO)} - {'', 'None'}
+    if chat not in autorizados:
         print(f'🚫 Decisão de chat não autorizado ({chat}) — ignorada', flush=True)
         _tg_api('answerCallbackQuery', callback_query_id=cb['id'],
                 text='Este chat não está registrado para aprovar.')
@@ -565,6 +569,29 @@ def _tg_tratar_callback(cb):
         print(f'🚫 {quem_nome} (id {quem_id}) não está na lista de aprovadores', flush=True)
         _tg_api('answerCallbackQuery', callback_query_id=cb['id'],
                 text='Você não tem permissão para aprovar.', show_alert=True)
+        return
+
+    # Botão do relatório das 8h: decide a equipe inteira naquele dia, não um
+    # lote só. Sai por aqui porque o resto do fluxo é montado em cima de um
+    # pedido de referência, que o relatório não tem.
+    if dado.startswith('dia_ok:') or dado.startswith('dia_no:'):
+        _tg_api('answerCallbackQuery', callback_query_id=cb['id'],
+                text='Aprovado ✅' if dado.startswith('dia_ok') else 'Reprovado ❌')
+        try:
+            info, afetados = _decidir_dia(dado, quem_nome)
+        except Exception as e:
+            print(f'❌ Decisão do relatório: {e}', flush=True)
+            return
+        if info:
+            decisao, equipe, data_iso, fluxo = info
+            # Repinta o relatório: a equipe decidida sai riscada e perde os
+            # botões, então dá para ver de relance o que ainda falta.
+            msg = cb.get('message') or {}
+            if msg.get('message_id'):
+                threading.Thread(
+                    target=_repintar_relatorio,
+                    args=(chat, msg['message_id'], fluxo, data_iso),
+                    daemon=True).start()
         return
 
     acao, _, referencia = dado.partition(':')
@@ -825,6 +852,186 @@ def _worker_resgate_aprovacoes():
             _resgatar_aprovacoes_perdidas()
         except Exception as e:
             print(f'❌ Worker de resgate: {e}', flush=True)
+
+
+# ==========================================================================
+# RELATÓRIO DAS 8H
+#
+# Todo dia de manhã, cada grupo recebe o resumo do que a turma vai comer
+# HOJE — uma linha por equipe, com o valor. É a visão que faltava: até
+# agora quem aprova só via pedido a pedido, sem nunca enxergar o dia
+# inteiro nem o quanto ele soma.
+#
+# Cada equipe leva seu par de botões. Aprovar tudo de uma vez seria mais
+# rápido, mas tiraria a chance de barrar uma equipe e liberar as outras.
+# ==========================================================================
+HORA_RELATORIO = 8           # 08:00 no horário de Brasília
+
+
+def _pedidos_do_dia(fluxo, data_iso):
+    """Pedidos de um fluxo com retirada na data, agrupados por equipe."""
+    marca = '%(FECHAMENTO)%' if fluxo == FLUXO_FECHAMENTO else '%(PAGCORP)%'
+    linhas = executar_query("""
+        SELECT ID, LIDER, PROJETO, ISNULL(NOME_LIDER,'') NOME_LIDER,
+               TOTAL_PAGAR, ISNULL(APROVADO,'') APROVADO
+        FROM PEDIDOS
+        WHERE CAST(DATA_RETIRADA AS DATE) = CAST(%s AS DATE)
+          AND OBSERVACOES LIKE %s
+        ORDER BY PROJETO, LIDER, ID
+    """, [data_iso, marca]) or []
+
+    equipes = {}
+    for p in linhas:
+        eq = equipes.setdefault(p['LIDER'], {
+            'equipe': p['LIDER'], 'projeto': p.get('PROJETO') or '',
+            'nome': p.get('NOME_LIDER') or '', 'total': 0.0,
+            'ids': [], 'decididos': 0,
+        })
+        try:
+            eq['total'] += float(p.get('TOTAL_PAGAR') or 0)
+        except (TypeError, ValueError):
+            pass
+        eq['ids'].append(int(p['ID']))
+        if (p.get('APROVADO') or '').strip().upper() in ('APROVADO', 'REPROVADO'):
+            eq['decididos'] += 1
+
+    return sorted(equipes.values(), key=lambda x: (x['projeto'], x['equipe']))
+
+
+def _montar_relatorio(fluxo, data_iso):
+    """Texto + botões do relatório. Devolve (texto, botoes) ou (None, None)."""
+    data_br = '/'.join(reversed(data_iso.split('-')))
+    equipes = _pedidos_do_dia(fluxo, data_iso)
+    if not equipes:
+        return None, None
+
+    def esc(v):
+        return (str(v if v is not None else '')
+                .replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
+
+    def moeda(v):
+        return f'{v:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+
+    titulo = 'FECHAMENTO' if fluxo == FLUXO_FECHAMENTO else 'PAGCORP'
+    linhas = [f'📋 <b>PEDIDOS {data_br}</b> — {titulo}', '']
+
+    total_dia = 0.0
+    for eq in equipes:
+        total_dia += eq['total']
+        # Equipe já decidida entra riscada: continua na conta do dia, mas
+        # sem parecer que ainda espera alguma coisa.
+        decidida = eq['decididos'] == len(eq['ids'])
+        linha = (f"{esc(eq['equipe'])} - {esc(eq['nome'])} - "
+                 f"<b>R$ {moeda(eq['total'])}</b>")
+        linhas.append(f'<s>{linha}</s> ✅' if decidida else linha)
+
+    linhas += ['', f'💰 <b>TOTAL: R$ {moeda(total_dia)}</b>']
+
+    # Um par de botões por equipe ainda pendente
+    botoes = []
+    for eq in equipes:
+        if eq['decididos'] == len(eq['ids']):
+            continue
+        alvo = f"{fluxo[0]}|{eq['equipe']}|{data_iso}"
+        botoes.append([
+            (f"✅ {eq['equipe']}", f'dia_ok:{alvo}'),
+            (f"❌ {eq['equipe']}", f'dia_no:{alvo}'),
+        ])
+
+    if not botoes:
+        linhas.append('')
+        linhas.append('<i>Tudo já decidido.</i>')
+
+    return '\n'.join(linhas), (botoes or None)
+
+
+def enviar_relatorio_diario(fluxo, data_iso=None):
+    """Monta e envia o resumo do dia para o grupo do fluxo."""
+    chat = telegram_chat_do_fluxo(fluxo)
+    if not chat:
+        return False, f'grupo de {fluxo} não registrado'
+
+    hoje = datetime.now(pytz.timezone('America/Sao_Paulo')).date()
+    data_iso = data_iso or hoje.isoformat()
+
+    texto, botoes = _montar_relatorio(fluxo, data_iso)
+    if not texto:
+        return False, 'nenhum pedido no dia'
+
+    ok, detalhe = telegram_enviar(chat, texto, botoes=botoes)
+    if ok:
+        print(f'📊 Relatório {fluxo} de {data_iso} enviado', flush=True)
+    return ok, detalhe
+
+
+def _repintar_relatorio(chat, message_id, fluxo, data_iso):
+    """Redesenha o relatório depois de uma decisão."""
+    texto, botoes = _montar_relatorio(fluxo, data_iso)
+    if not texto:
+        return
+    corpo = {'chat_id': chat, 'message_id': message_id,
+             'text': texto, 'parse_mode': 'HTML'}
+    if botoes:
+        corpo['reply_markup'] = {'inline_keyboard': [
+            [{'text': r, 'callback_data': d} for r, d in linha] for linha in botoes
+        ]}
+    _tg_api('editMessageText', **corpo)
+
+
+def _decidir_dia(dado, quem_nome):
+    """Trata o clique do relatório: decide a equipe inteira naquele dia."""
+    acao, _, alvo = dado.partition(':')
+    decisao = 'APROVADO' if acao == 'dia_ok' else 'REPROVADO'
+
+    partes = alvo.split('|')
+    if len(partes) != 3:
+        return None, 0
+    inicial, equipe, data_iso = partes
+    fluxo = FLUXO_FECHAMENTO if inicial == 'F' else FLUXO_PAGCORP
+    marca = '%(FECHAMENTO)%' if fluxo == FLUXO_FECHAMENTO else '%(PAGCORP)%'
+
+    # Só o que ainda não foi decidido, e só do fluxo daquele grupo: o
+    # relatório do PAGCORP não pode mexer em pedido de Fechamento.
+    afetados = executar_query("""
+        UPDATE PEDIDOS SET APROVADO = %s, APROVADO_POR = %s
+        WHERE LIDER = %s
+          AND CAST(DATA_RETIRADA AS DATE) = CAST(%s AS DATE)
+          AND OBSERVACOES LIKE %s
+          AND (APROVADO IS NULL OR APROVADO = 'AGUARDANDO')
+    """, [decisao, quem_nome[:100], equipe, data_iso, marca])
+
+    print(f'📊 {decisao} do dia por {quem_nome}: {afetados} pedido(s) '
+          f'da equipe {equipe} em {data_iso} ({fluxo})', flush=True)
+    return (decisao, equipe, data_iso, fluxo), (afetados or 0)
+
+
+def _worker_relatorio_diario():
+    """Dispara o relatório às 8h, uma vez por dia, em cada grupo."""
+    tz = pytz.timezone('America/Sao_Paulo')
+    while True:
+        time.sleep(60)
+        try:
+            agora = datetime.now(tz)
+            if agora.hour != HORA_RELATORIO:
+                continue
+
+            hoje = agora.date().isoformat()
+            with _lock_telegram:
+                estado = _tg_estado()
+                if estado.get('relatorio_em') == hoje:
+                    continue          # já saiu hoje
+                estado['relatorio_em'] = hoje
+                _tg_salvar(estado)
+
+            for fluxo in (FLUXO_PAGCORP, FLUXO_FECHAMENTO):
+                try:
+                    ok, detalhe = enviar_relatorio_diario(fluxo, hoje)
+                    if not ok:
+                        print(f'ℹ️ Relatório {fluxo} não enviado: {detalhe}', flush=True)
+                except Exception as e:
+                    print(f'❌ Relatório {fluxo}: {e}', flush=True)
+        except Exception as e:
+            print(f'❌ Worker do relatório: {e}', flush=True)
 
 
 def _tg_tratar_mensagem(msg):
@@ -4009,6 +4216,9 @@ def main():
 
     # Pesca as aprovações que não saíram no momento do pedido
     threading.Thread(target=_worker_resgate_aprovacoes, daemon=True).start()
+
+    # Resumo do dia, às 8h, em cada grupo
+    threading.Thread(target=_worker_relatorio_diario, daemon=True).start()
 
     # Reprocessa o que ficou na fila de envios anteriores
     threading.Thread(target=processar_fila_blob, daemon=True).start()
