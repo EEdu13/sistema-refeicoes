@@ -3402,16 +3402,18 @@
                     return;
                 }
 
-                // Aprovação de saldo só existe no PAGCORP — no Fechamento o
-                // pedido só entra no fechamento mensal, sem passar pela Elaine
-                // nem gerar aviso de pendente/aprovado no WhatsApp.
+                // Os dois fluxos passam por aprovação, cada um no SEU grupo
+                // do Telegram: PAGCORP repõe saldo de cartão e vira depósito;
+                // Fechamento é pago no fim do mês. Misturar os dois num grupo
+                // só fez aprovar Fechamento achando que era PAGCORP.
                 let aprovacao = {};
-                if (PedidoState.tipo !== 'FECHAMENTO') {
+                {
                     try {
                         const ra = await SESSION.apiFetch('/api/pedido-aprovacao', {
                             method: 'POST',
                             body: JSON.stringify({
                                 pedido_ids: idsGerados,
+                                tipo: PedidoState.tipo,
                                 resumo: {
                                     solicitante: usuario.nome || usuario.login || '',
                                     projeto: projeto,
@@ -3460,12 +3462,12 @@
                 // ele retoma pelo aviso do menu.
                 guardarEnvios(grupos);
 
-                const base = PedidoState.tipo === 'FECHAMENTO'
-                    ? 'Registrado para o fechamento mensal.'
-                    : aprovacao.enviado
-                        ? `Aguardando aprovação de ${aprovacao.aprovador || APROVADOR_NOME}. `
-                          + 'Você recebe a resposta no WhatsApp.'
-                        : 'Pedido registrado. A aprovação será tratada manualmente.';
+                // Fechamento também passa por aprovação agora, então o texto
+                // não pode mais dizer que ele "só entra no fechamento".
+                const base = aprovacao.enviado
+                    ? `Aguardando aprovação de ${aprovacao.aprovador || APROVADOR_NOME}. `
+                      + 'Você recebe a resposta no WhatsApp.'
+                    : 'Pedido registrado. A aprovação será tratada manualmente.';
 
                 mostrarResultado({
                     tipo: houveFalha ? 'aviso' : 'ok',

@@ -348,12 +348,34 @@ def telegram_configurado():
     return bool(TELEGRAM_TOKEN)
 
 
+# ==========================================================================
+# DOIS GRUPOS, DOIS FLUXOS
+#
+# PAGCORP e Fechamento são dinheiros diferentes: um repõe saldo de cartão e
+# vira depósito do financeiro; o outro é pago no fechamento do mês. Misturar
+# os dois num grupo só fez a Elaine aprovar Fechamento achando que era
+# PAGCORP — e pedido de Fechamento aprovado entra na fila de depósito e
+# corre risco de ser pago duas vezes.
+#
+# Cada fluxo tem seu grupo. O chat de cada um é descoberto pelo /start (ver
+# _tg_tratar_mensagem), com o env como valor inicial.
+# ==========================================================================
+TELEGRAM_CHAT_FECHAMENTO = os.getenv('TELEGRAM_CHAT_FECHAMENTO', '')
+
+FLUXO_PAGCORP = 'PAGCORP'
+FLUXO_FECHAMENTO = 'FECHAMENTO'
+
+
 def _tg_estado():
     try:
         with open(ARQUIVO_TELEGRAM, encoding='utf-8') as f:
             return json.load(f)
     except Exception:
-        return {'chat_aprovador': TELEGRAM_CHAT_APROVADOR, 'ultimo_update': 0}
+        return {
+            'chat_aprovador': TELEGRAM_CHAT_APROVADOR,
+            'chat_fechamento': TELEGRAM_CHAT_FECHAMENTO,
+            'ultimo_update': 0,
+        }
 
 
 def _tg_salvar(estado):
@@ -364,9 +386,18 @@ def _tg_salvar(estado):
         print(f'⚠️ Não consegui salvar o estado do Telegram: {e}', flush=True)
 
 
-def telegram_chat_aprovador():
+def telegram_chat_do_fluxo(fluxo):
+    """Para qual grupo vai este pedido."""
     with _lock_telegram:
-        return _tg_estado().get('chat_aprovador') or TELEGRAM_CHAT_APROVADOR
+        estado = _tg_estado()
+    if fluxo == FLUXO_FECHAMENTO:
+        return estado.get('chat_fechamento') or TELEGRAM_CHAT_FECHAMENTO
+    return estado.get('chat_aprovador') or TELEGRAM_CHAT_APROVADOR
+
+
+def telegram_chat_aprovador():
+    """Grupo do PAGCORP (nome antigo, mantido por compatibilidade)."""
+    return telegram_chat_do_fluxo(FLUXO_PAGCORP)
 
 
 # Conexão reaproveitada (keep-alive). Abrir conexão nova a cada chamada
@@ -412,12 +443,17 @@ def telegram_enviar(chat_id, texto, botoes=None):
     return False, (r or {}).get('description', 'sem resposta')
 
 
-def telegram_pedir_aprovacao(resumo, ids):
-    """Manda o pedido para quem aprova, com os botões de decisão."""
-    chat = telegram_chat_aprovador()
+def telegram_pedir_aprovacao(resumo, ids, fluxo=FLUXO_PAGCORP):
+    """Manda o pedido para quem aprova, com os botões de decisão.
+
+    `fluxo` escolhe o grupo: PAGCORP repõe saldo de cartão e vira depósito;
+    Fechamento é pago no fim do mês. Cada um no seu grupo, senão a decisão
+    de um vira pagamento indevido no outro.
+    """
+    chat = telegram_chat_do_fluxo(fluxo)
     if not chat:
-        return False, (f'Ninguém iniciou conversa com @{TELEGRAM_BOT_USER} ainda. '
-                       f'Peça para {NOME_APROVADOR} mandar /start para o bot.')
+        return False, (f'Grupo de {fluxo} ainda não registrado. '
+                       f'Mande /start SENHA {fluxo} no grupo, com @{TELEGRAM_BOT_USER} dentro.')
 
     referencia = str(min(int(i) for i in ids))
 
@@ -425,12 +461,18 @@ def telegram_pedir_aprovacao(resumo, ids):
         return (str(v if v is not None else '—')
                 .replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
 
+    fechamento = fluxo == FLUXO_FECHAMENTO
     linhas = [
-        '🍽️ <b>SOLICITAÇÃO DE REFEIÇÃO</b>',
+        ('📋 <b>REFEIÇÃO — FECHAMENTO</b>' if fechamento
+         else '💳 <b>REFEIÇÃO — PAGCORP</b>'),
         '',
         f"👤 <b>Solicitante:</b> {esc(resumo.get('solicitante'))}",
         f"🏢 <b>Projeto/Equipe:</b> {esc(resumo.get('projeto'))} / {esc(resumo.get('equipe'))}",
-        f"💳 <b>PAGCORP:</b> {esc(resumo.get('pagcorp'))}",
+    ]
+    # No Fechamento o cartão não entra na conta — quem paga é o mês.
+    if not fechamento:
+        linhas.append(f"💳 <b>PAGCORP:</b> {esc(resumo.get('pagcorp'))}")
+    linhas += [
         f"📅 <b>Data:</b> {esc(resumo.get('data'))}",
         f"📍 <b>Cidade:</b> {esc(resumo.get('cidade'))}",
     ]
@@ -683,19 +725,19 @@ def _resgatar_aprovacoes_perdidas():
                TOTAL_PAGAR, CIDADE_PRESTACAO_DO_SERVICO, OBSERVACOES
         FROM PEDIDOS
         WHERE APROVADO IS NULL
-          AND PAGCORP IS NOT NULL AND LTRIM(RTRIM(PAGCORP)) <> ''
-          -- SÓ pedido que o app marcou como PAGCORP.
+          -- O tipo vem da marca que o app deixou, e é ela que decide o GRUPO.
           --
-          -- Ter PAGCORP preenchido não basta: pedido de Fechamento também
-          -- carrega o número do cartão, e ele NÃO passa por aprovação — quem
-          -- paga é o fechamento do mês. Filtrando só pelo cartão, mandei
-          -- Fechamento para o grupo da Elaine sem necessidade.
+          -- Ter o número do cartão preenchido não serve de critério: pedido
+          -- de Fechamento também carrega PAGCORP. Foi filtrando por ele que
+          -- mandei Fechamento para o grupo do PAGCORP.
           --
-          -- A coluna FECHAMENTO também não serve de critério: uma trigger a
-          -- preenche a partir do cadastro do FORNECEDOR, então ela diz o que
-          -- o restaurante aceita, não como o pedido foi pago. O único sinal
-          -- confiável é o que o próprio app gravou ao enviar.
-          AND OBSERVACOES LIKE '%(PAGCORP)%'
+          -- A coluna FECHAMENTO também não serve: uma trigger a preenche a
+          -- partir do cadastro do FORNECEDOR, então ela diz o que o
+          -- restaurante aceita, não como o pedido foi pago.
+          --
+          -- Pedido do app antigo não tem marca nenhuma e fica de fora: sem
+          -- saber o tipo, mandá-lo é arriscar o grupo errado de novo.
+          AND (OBSERVACOES LIKE '%(PAGCORP)%' OR OBSERVACOES LIKE '%(FECHAMENTO)%')
           AND Criado >= CAST(DATEADD(day, -1, GETDATE()) AS DATE)
           AND Criado <= DATEADD(minute, -{IDADE_MINIMA_RESGATE}, GETDATE())
         ORDER BY ID
@@ -748,9 +790,14 @@ def _resgatar_aprovacoes_perdidas():
             'motivo': 'Reenvio automático — o envio no momento do pedido não saiu.',
         }
 
-        ok, detalhe = telegram_pedir_aprovacao(resumo, ids)
+        # O fluxo vem da marca que o app deixou na observação — é ela que
+        # decide o grupo, e trocar isso é mandar dinheiro para o lugar errado.
+        obs = str(base.get('OBSERVACOES') or '')
+        fluxo = FLUXO_FECHAMENTO if '(FECHAMENTO)' in obs else FLUXO_PAGCORP
+
+        ok, detalhe = telegram_pedir_aprovacao(resumo, ids, fluxo)
         if not ok:
-            print(f'⚠️ Resgate falhou para {lider}/{data}: {detalhe}', flush=True)
+            print(f'⚠️ Resgate falhou para {lider}/{data} ({fluxo}): {detalhe}', flush=True)
             continue
 
         marcadores = ', '.join(['%s'] * len(ids))
@@ -795,10 +842,16 @@ def _tg_tratar_mensagem(msg):
     if not texto.startswith('/start'):
         return
 
-    # Em grupo o comando vem como /start@NomeDoBot SENHA
+    # Em grupo o comando vem como /start@NomeDoBot SENHA [FLUXO]
     texto_limpo = re.sub(r'^/start(@\S+)?', '/start', texto)
-    partes = texto_limpo.split(maxsplit=1)
+    partes = texto_limpo.split()
     informada = partes[1].strip() if len(partes) > 1 else ''
+
+    # A terceira palavra escolhe o grupo. Sem ela, PAGCORP — era o único
+    # fluxo antes e segue sendo o caso comum.
+    pedido_fluxo = (partes[2].strip().upper() if len(partes) > 2 else FLUXO_PAGCORP)
+    fluxo = FLUXO_FECHAMENTO if pedido_fluxo.startswith('FECH') else FLUXO_PAGCORP
+    campo = 'chat_fechamento' if fluxo == FLUXO_FECHAMENTO else 'chat_aprovador'
 
     tipo_chat = (msg.get('chat') or {}).get('type') or 'private'
     em_grupo = tipo_chat in ('group', 'supergroup')
@@ -806,7 +859,7 @@ def _tg_tratar_mensagem(msg):
 
     with _lock_telegram:
         estado = _tg_estado()
-        atual = estado.get('chat_aprovador')
+        atual = estado.get(campo)
 
     # Sem senha configurada o registro fica fechado — falhar fechado, não aberto
     if not TELEGRAM_SENHA_REGISTRO:
@@ -827,8 +880,9 @@ def _tg_tratar_mensagem(msg):
     if not hmac.compare_digest(informada.upper(), TELEGRAM_SENHA_REGISTRO.upper()):
         print(f'🚫 /start com senha inválida ({nome}, chat {chat})', flush=True)
         telegram_enviar(chat,
-            'Para receber as aprovações, envie:\n\n'
-            '<code>/start SENHA</code>\n\n'
+            'Para este grupo receber os pedidos, envie uma destas:\n\n'
+            '<code>/start SENHA PAGCORP</code>\n'
+            '<code>/start SENHA FECHAMENTO</code>\n\n'
             'A senha é fornecida pela TI.')
         return
 
@@ -836,15 +890,20 @@ def _tg_tratar_mensagem(msg):
     # merece saber, senão a transferência acontece em silêncio.
     substituiu = bool(atual) and chat != str(atual)
 
+    # Um grupo não pode acumular os dois fluxos: seria o mesmo problema de
+    # antes, com Fechamento e PAGCORP misturados na mesma conversa.
+    outro_campo = 'chat_aprovador' if campo == 'chat_fechamento' else 'chat_fechamento'
     with _lock_telegram:
         estado = _tg_estado()
-        estado['chat_aprovador'] = chat
+        if str(estado.get(outro_campo) or '') == chat:
+            estado[outro_campo] = ''
+        estado[campo] = chat
         estado['registrado_em'] = datetime.now(
             pytz.timezone('America/Sao_Paulo')).isoformat()
         estado['registrado_por'] = nome
         _tg_salvar(estado)
 
-    print(f'✅ Telegram: aprovação registrada em '
+    print(f'✅ Telegram: {fluxo} registrado em '
           + (f'GRUPO "{titulo_chat}"' if em_grupo else f'conversa com {nome}')
           + f' (chat {chat})' + (' — substituiu o anterior' if substituiu else ''),
           flush=True)
@@ -862,8 +921,8 @@ def _tg_tratar_mensagem(msg):
                        '\n\n🔒 Só as pessoas autorizadas conseguem decidir.')
         telegram_enviar(chat,
             f'Pronto! 👋\n\n'
-            f'As solicitações de refeição passam a chegar aqui em <b>{titulo_chat}</b>, '
-            'com os botões <b>APROVAR</b> e <b>REPROVAR</b>.' + aviso_extra)
+            f'Os pedidos de <b>{fluxo}</b> passam a chegar aqui em '
+            f'<b>{titulo_chat}</b>, com os botões de aprovar e reprovar.' + aviso_extra)
     else:
         telegram_enviar(chat,
             f'Olá, {nome}! 👋\n\n'
@@ -3064,6 +3123,14 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 ids = dados.get('pedido_ids') or []
                 resumo = dados.get('resumo') or {}
 
+                # Cada forma de pagamento tem seu grupo no Telegram: PAGCORP
+                # repoe saldo de cartao e vira deposito; Fechamento e pago no
+                # fim do mes. Trocar o grupo e mandar dinheiro para o lugar
+                # errado, entao o app diz explicitamente qual e.
+                fluxo = (FLUXO_FECHAMENTO
+                         if str(dados.get('tipo') or '').upper().startswith('FECH')
+                         else FLUXO_PAGCORP)
+
                 if not ids:
                     self._enviar_json({"error": True, "message": "Nenhum pedido informado"}, status=400)
                     return
@@ -3125,7 +3192,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
 
                 # A decisão vai pelo Telegram (botões + resposta sem webhook);
                 # o aviso de status continua no WhatsApp, mais adiante.
-                ok, detalhe = telegram_pedir_aprovacao(resumo, ids)
+                ok, detalhe = telegram_pedir_aprovacao(resumo, ids, fluxo)
 
                 # Falha aqui e' silenciosa pro usuario (o app engole o erro),
                 # entao ela precisa gritar no log — foi so' com log que deu
