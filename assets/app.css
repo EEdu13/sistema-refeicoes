@@ -2337,21 +2337,53 @@ input[type="radio"], input[type="checkbox"] { accent-color: var(--lar-green); wi
 /* Vários cartões: um do lado do outro, rolando na horizontal. Empilhar
    deixaria a etapa comprida no celular e o segundo cartão fora da tela —
    lado a lado, dá para comparar os centros de custo de uma olhada. */
-.cartoes-grade { display: flex; flex-direction: column; gap: 12px; }
-.cartoes-grade.varios {
-    flex-direction: row;
-    gap: 10px;
-    overflow-x: auto;
-    padding-bottom: 6px;
-    scroll-snap-type: x mandatory;
-    -webkit-overflow-scrolling: touch;
+/* Herói + miniaturas. O cartão em uso ocupa a largura toda; os outros
+   viram pastilhas pequenas logo acima. Quem bate o olho não precisa
+   comparar dois retângulos iguais para saber qual está valendo — o
+   tamanho já responde. */
+.cartoes-pilha { display: flex; flex-direction: column; gap: 10px; }
+
+.cartoes-outros {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
-.cartoes-grade.varios .cartao {
-    flex: 0 0 84%;
-    scroll-snap-align: start;
-    padding: 18px 16px;
+
+.cartao-mini {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    background: linear-gradient(135deg, #1B5E3C 0%, #133F2C 100%);
+    border: 1px solid rgba(111, 207, 123, .28);
+    opacity: .78;
+    transition: opacity var(--t-rapida), border-color var(--t-rapida),
+                transform .12s;
 }
-.cartoes-grade.varios .cartao-topo { margin-bottom: 18px; }
+.cartao-mini:hover,
+.cartao-mini:focus-visible {
+    opacity: 1;
+    border-color: var(--lar-green);
+}
+.cartao-mini:active { transform: scale(.96); }
+
+.cartao-mini-numero {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    color: #EAF7EE;
+}
+.cartao-mini-cc {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: rgba(234, 247, 238, .62);
+}
 
 .cartao {
     position: relative;
@@ -2378,21 +2410,6 @@ button.cartao:active { transform: scale(.985); }
     border-color: var(--lar-green);
     box-shadow: 0 0 0 2px var(--lar-green), 0 20px 44px -18px rgba(0, 0, 0, .8);
 }
-/* Depois da escolha, o resto recua de verdade. Os cartoes sao todos do
-   mesmo verde, entao um apagamento timido ainda deixava a duvida "qual
-   esta valendo?" — que foi a reclamacao. So vale quando ha escolha: sem
-   ela, todos aparecem cheios e igualmente convidativos. */
-.cartoes-grade.tem-escolhido .cartao:not(.escolhido) {
-    opacity: .34;
-    filter: saturate(.4);
-    transform: scale(.96);
-}
-.cartoes-grade.tem-escolhido .cartao:not(.escolhido):hover,
-.cartoes-grade.tem-escolhido .cartao:not(.escolhido):focus-visible {
-    opacity: .72;
-    filter: saturate(.8);
-}
-.cartoes-grade:not(.varios) .cartao { opacity: 1; filter: none; transform: none; }
 
 .cartao-visto {
     display: inline-flex;

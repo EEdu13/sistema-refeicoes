@@ -2047,34 +2047,63 @@
                 caixa.appendChild(dica);
             }
 
-            const grade = document.createElement('div');
-            // 'tem-escolhido' liga o apagamento dos demais. Sem escolha
-            // ainda, todos ficam cheios: nao ha o que destacar.
-            grade.className = 'cartoes-grade'
-                + (lista.length > 1 ? ' varios' : '')
-                + (atual ? ' tem-escolhido' : '');
-
-            let alvo = null;
-            lista.forEach(c => {
-                const escolhido = atual && String(atual.CONTA) === String(c.CONTA);
-                const no = montarCartao(c, escolhido, lista.length > 1);
-                if (escolhido) alvo = no;
-                grade.appendChild(no);
-            });
-
-            caixa.appendChild(grade);
-
-            // O clique redesenha a grade, e a rolagem do carrossel volta ao
-            // inicio — o cartao recem-escolhido sairia de vista bem na hora
-            // de confirmar a escolha.
+            // Herói + miniaturas: o escolhido aparece grande, e os outros
+            // ficam pequenos acima dele. Tocar num pequeno o promove a
+            // grande.
             //
-            // Mexe no scrollLeft da propria grade em vez de scrollIntoView:
-            // aquele rola qualquer ancestral que precise, inclusive a
-            // pagina, e tela pulando sozinha ja deu problema antes aqui.
-            if (alvo && lista.length > 1) {
-                grade.scrollLeft = Math.max(
-                    0, alvo.offsetLeft - (grade.clientWidth - alvo.clientWidth) / 2);
+            // O tamanho passa a ser a resposta de "qual está valendo".
+            // Cor não servia — os cartões são todos do mesmo verde — e
+            // apagar os outros também não bastou: dois retângulos do mesmo
+            // tamanho lado a lado continuam disputando a atenção.
+            const principal = lista.find(
+                c => atual && String(c.CONTA) === String(atual.CONTA)) || lista[0];
+            const outros = lista.filter(
+                c => String(c.CONTA) !== String(principal.CONTA));
+
+            const pilha = document.createElement('div');
+            pilha.className = 'cartoes-pilha';
+
+            if (outros.length) {
+                const fila = document.createElement('div');
+                fila.className = 'cartoes-outros';
+                outros.forEach(c => fila.appendChild(montarCartaoMini(c)));
+                pilha.appendChild(fila);
             }
+
+            pilha.appendChild(montarCartao(principal, lista.length > 1, false));
+            caixa.appendChild(pilha);
+        }
+
+        /** Miniatura de um cartão não escolhido. Toque promove a grande. */
+        function montarCartaoMini(c) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'cartao-mini';
+            b.setAttribute('aria-label',
+                `Usar o cartão final ${finalDoCartao(c.CONTA)}, centro de custo ${c.CC || '—'}`);
+
+            const num = document.createElement('span');
+            num.className = 'cartao-mini-numero';
+            num.textContent = '•••• ' + finalDoCartao(c.CONTA);
+
+            const cc = document.createElement('span');
+            cc.className = 'cartao-mini-cc';
+            cc.textContent = 'CC ' + (c.CC || '—');
+
+            b.append(num, cc);
+            b.onclick = () => {
+                PedidoState.cartao = {
+                    CONTA: c.CONTA, CC: c.CC || '', LIDER: c.LIDER || '',
+                };
+                renderCartao();
+            };
+            return b;
+        }
+
+        /** Últimos 4 dígitos — o que identifica o cartão na mão da pessoa. */
+        function finalDoCartao(conta) {
+            const d = String(conta || '').replace(/\D/g, '');
+            return d.slice(-4) || '—';
         }
 
         /** Um cartão desenhado. `selecionavel` liga o toque e a marca de escolhido. */
@@ -2094,7 +2123,7 @@
 
             // Visto no canto: com dois cartões parecidos, a borda sozinha
             // não responde "qual está valendo" de relance.
-            if (selecionavel && escolhido) {
+            if (escolhido) {
                 const visto = document.createElement('span');
                 visto.className = 'cartao-visto';
                 visto.textContent = '✓';
