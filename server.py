@@ -527,7 +527,7 @@ def _tg_tratar_callback(cb):
                 is_big=True)
 
     base = executar_query(
-        "SELECT LIDER, DATA_RETIRADA FROM PEDIDOS WHERE ID = %s", [int(referencia)])
+        "SELECT LIDER, DATA_RETIRADA, Criado FROM PEDIDOS WHERE ID = %s", [int(referencia)])
     if not base:
         # Pedido sumiu do banco: some com os botões e diz o que houve, senão
         # a mensagem fica clicável para sempre sem nunca resolver nada.
@@ -538,20 +538,54 @@ def _tg_tratar_callback(cb):
         return
 
     b = base[0]
-    # APROVADO_POR passa a guardar QUEM clicou, não o nome fixo do .env: num
-    # grupo com várias pessoas, a decisão precisa ter dono.
-    afetados = executar_query(
-        "UPDATE PEDIDOS SET APROVADO = %s, APROVADO_POR = %s WHERE LIDER = %s "
-        "AND CAST(DATA_RETIRADA AS DATE) = CAST(%s AS DATE) AND APROVADO = 'AGUARDANDO'",
-        [decisao, quem_nome[:100], b['LIDER'], b['DATA_RETIRADA']])
 
-    print(f'✅ {decisao} por {quem_nome}: {afetados} pedido(s) da equipe {b["LIDER"]}', flush=True)
+    # Decide SÓ os pedidos DESTA mensagem.
+    #
+    # Antes o UPDATE era por LIDER + DATA_RETIRADA, e isso varria todos os
+    # lotes do dia daquela equipe. Uma equipe costuma pedir em levas (o café
+    # e o almoço às 22h, a janta às 23h), e cada leva vira uma mensagem: o
+    # primeiro clique aprovava também o que estava na SEGUNDA mensagem, sem
+    # ninguém ter olhado. Depois, ao clicar nessa segunda, já não havia nada
+    # em AGUARDANDO, o código saía antes e ela ficava sem o risco — foi assim
+    # que o problema apareceu ("a janta não risca").
+    #
+    # Os ids exatos ficaram guardados no envio (registrar_solicitante).
+    solicitante = buscar_solicitante(referencia) or {}
+    ids_desta = [int(i) for i in (solicitante.get('pedidos') or []) if str(i).isdigit()]
+
+    if ids_desta:
+        marcadores = ', '.join(['%s'] * len(ids_desta))
+        afetados = executar_query(
+            f"UPDATE PEDIDOS SET APROVADO = %s, APROVADO_POR = %s "
+            f"WHERE ID IN ({marcadores}) AND APROVADO = 'AGUARDANDO'",
+            [decisao, quem_nome[:100]] + ids_desta)
+        alcance = f'{len(ids_desta)} pedido(s) desta mensagem'
+    else:
+        # Sem o registro (ele vive em disco, e o Railway zera o disco a cada
+        # deploy): agrupa pelo HORÁRIO do lote. Um lote é gravado em poucos
+        # segundos, e levas diferentes ficam separadas por muitos minutos —
+        # então uma janela curta em volta do pedido de referência isola a
+        # leva certa sem varrer o dia inteiro da equipe.
+        afetados = executar_query(
+            "UPDATE PEDIDOS SET APROVADO = %s, APROVADO_POR = %s WHERE LIDER = %s "
+            "AND CAST(DATA_RETIRADA AS DATE) = CAST(%s AS DATE) "
+            "AND ABS(DATEDIFF(second, Criado, %s)) <= 120 "
+            "AND APROVADO = 'AGUARDANDO'",
+            [decisao, quem_nome[:100], b['LIDER'], b['DATA_RETIRADA'], b['Criado']])
+        alcance = f'lote da equipe {b["LIDER"]} em {b["DATA_RETIRADA"]} (por horário)'
+
+    print(f'✅ {decisao} por {quem_nome}: {afetados} de {alcance}', flush=True)
 
     # Clique repetido: o UPDATE já não achou nada em AGUARDANDO pra mudar.
-    # Já respondemos o toque lá em cima (harmless repetir a reação); o que
-    # importa é não editar a mensagem de novo nem reenviar o WhatsApp — foi
-    # isso que "spamava" o solicitante numa leva de cliques.
+    # Ainda assim carimbamos a mensagem — ela pode estar sem risco por causa
+    # do problema acima, e deixá-la crua faria parecer que o clique não valeu.
+    # O que NÃO se repete é a devolutiva por WhatsApp.
     if not afetados:
+        if msg.get('message_id'):
+            marca = '✅ <b>APROVADO</b>' if decisao == 'APROVADO' else '❌ <b>REPROVADO</b>'
+            _tg_api('editMessageText', chat_id=chat, message_id=msg['message_id'],
+                    text=_tg_texto_decidido(msg, f'{marca} (já estava decidido)'),
+                    parse_mode='HTML')
         return
 
     # Carimbo na mensagem e devolutiva por WhatsApp são louça: quem já
