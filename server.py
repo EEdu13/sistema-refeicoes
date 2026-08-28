@@ -1316,16 +1316,25 @@ def _tg_tratar_mensagem(msg):
     chat = str((msg.get('chat') or {}).get('id') or '')
     nome = ((msg.get('from') or {}).get('first_name') or 'você')
 
-    # Consulta de fechamento: aceita com ou sem barra, porque em conversa
-    # normal ninguém lembra da barra. Só vale nos grupos registrados — a
-    # resposta expõe quanto se gastou com cada fornecedor.
+    # Consulta de fechamento. Em grupo, o Telegram só entrega ao bot o que
+    # começa com barra (modo privacidade, ligado por padrão) — por isso a
+    # barra é o caminho oficial. Sem barra só chega se o modo privacidade
+    # for desligado no BotFather; o código aceita as duas formas.
     primeira = re.sub(r'^/', '', texto.split()[0].lower()) if texto.split() else ''
     if primeira.split('@')[0] in ('fechamento', 'historico', 'histórico'):
         autorizados = {str(telegram_chat_do_fluxo(f))
                        for f in (FLUXO_PAGCORP, FLUXO_FECHAMENTO)} - {'', 'None'}
         if chat not in autorizados:
+            # Responder em vez de calar: um grupo não registrado parece
+            # idêntico a um bot quebrado quando a resposta é silêncio, e
+            # foi assim que se perdeu tempo achando que o comando não
+            # funcionava. Não vaza nada — só diz que aqui não vale.
             print(f'🚫 Consulta de fechamento de chat não autorizado ({chat})',
                   flush=True)
+            telegram_enviar(chat,
+                            'Este grupo não está registrado para consultas.\n\n'
+                            'Use <code>/start SENHA PAGCORP</code> ou '
+                            '<code>/start SENHA FECHAMENTO</code> para registrar.')
             return
         try:
             _responder_fechamento(chat, texto)
@@ -1438,6 +1447,14 @@ def _worker_telegram():
         offset = estado.get('ultimo_update', 0)
 
     print(f'🤖 Telegram: escutando @{TELEGRAM_BOT_USER}', flush=True)
+
+    # Deixa o comando visível no menu do Telegram. Sem isto ele existe mas
+    # ninguém descobre que existe — e em grupo a barra não é opcional: o
+    # modo privacidade só entrega ao bot o que começa com ela.
+    _tg_api('setMyCommands', commands=[
+        {'command': 'fechamento',
+         'description': 'Contagem por fornecedor. Ex: /fechamento carreiro 01/09 a 15/09'},
+    ])
 
     while True:
         try:
