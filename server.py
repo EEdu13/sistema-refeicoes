@@ -18,6 +18,8 @@ import os
 import requests
 from dotenv import load_dotenv
 
+import relatorio_pdf
+
 # Carregar variáveis de ambiente
 load_dotenv()
 
@@ -441,6 +443,30 @@ def telegram_enviar(chat_id, texto, botoes=None):
     if r and r.get('ok'):
         return True, r['result'].get('message_id')
     return False, (r or {}).get('description', 'sem resposta')
+
+
+def telegram_enviar_documento(chat_id, nome, conteudo, legenda=None,
+                              tipo='application/pdf'):
+    """Envia um arquivo. Vai como documento, não como foto, para o PDF
+    chegar do jeito que saiu — dá para imprimir, encaminhar e buscar nome
+    dentro dele. O Telegram ainda mostra a primeira página como miniatura."""
+    if not telegram_configurado():
+        return False, 'telegram não configurado'
+    try:
+        r = _sessao_telegram.post(
+            f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument',
+            data={'chat_id': str(chat_id), 'caption': legenda or '',
+                  'parse_mode': 'HTML'},
+            files={'document': (nome, conteudo, tipo)},
+            timeout=60)
+        resposta = r.json()
+    except (requests.exceptions.RequestException, ValueError) as e:
+        print(f'⚠️ Telegram sendDocument: {e}', flush=True)
+        return False, str(e)
+
+    if resposta.get('ok'):
+        return True, resposta['result'].get('message_id')
+    return False, resposta.get('description', 'sem resposta')
 
 
 def telegram_pedir_aprovacao(resumo, ids, fluxo=FLUXO_PAGCORP):
@@ -964,6 +990,69 @@ def enviar_relatorio_diario(fluxo, data_iso=None):
     return ok, detalhe
 
 
+def _detalhe_do_dia(fluxo, data_iso):
+    """Linhas cruas para o PDF: uma por pedido, com nomes e valor unitário."""
+    marca = '%(FECHAMENTO)%' if fluxo == FLUXO_FECHAMENTO else '%(PAGCORP)%'
+    return executar_query("""
+        SELECT PROJETO, LIDER, ISNULL(NOME_LIDER,'') NOME_LIDER,
+               ISNULL(TIPO_REFEICAO,'') TIPO_REFEICAO,
+               ISNULL(FORNECEDOR,'') FORNECEDOR,
+               VALOR_PAGO, TOTAL_COLABORADORES, TOTAL_PAGAR,
+               ISNULL(COLABORADORES,'') COLABORADORES,
+               ISNULL(APROVADO,'') APROVADO
+        FROM PEDIDOS
+        WHERE CAST(DATA_RETIRADA AS DATE) = CAST(%s AS DATE)
+          AND OBSERVACOES LIKE %s
+        ORDER BY PROJETO, LIDER, TIPO_REFEICAO, ID
+    """, [data_iso, marca]) or []
+
+
+def enviar_relatorio_pdf(fluxo, data_iso=None):
+    """Gera o relatório de gerência em PDF e manda no grupo do fluxo."""
+    chat = telegram_chat_do_fluxo(fluxo)
+    if not chat:
+        return False, f'grupo de {fluxo} não registrado'
+
+    tz = pytz.timezone('America/Sao_Paulo')
+    data_iso = data_iso or datetime.now(tz).date().isoformat()
+
+    linhas = _detalhe_do_dia(fluxo, data_iso)
+    if not linhas:
+        return False, 'nenhum pedido no dia'
+
+    try:
+        pdf = relatorio_pdf.gerar_pdf(fluxo, data_iso, linhas)
+    except Exception as e:
+        print(f'🚨 Falhou ao gerar o PDF de {fluxo} {data_iso}: {e}', flush=True)
+        return False, str(e)
+    if not pdf:
+        return False, 'nenhum pedido no dia'
+
+    # A legenda leva o essencial: quem só quer o número não precisa abrir.
+    equipes, pessoas, total = set(), 0, 0.0
+    for l in linhas:
+        equipes.add(l.get('LIDER'))
+        try:
+            pessoas += int(l.get('TOTAL_COLABORADORES') or 0)
+            total += float(l.get('TOTAL_PAGAR') or 0)
+        except (TypeError, ValueError):
+            pass
+
+    data_br = '/'.join(reversed(data_iso.split('-')))
+    valor = f'{total:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+    legenda = (f'📄 <b>Relatório de Refeições</b> — {data_br} — {fluxo}\n'
+               f'{len(equipes)} equipe(s) · {len(linhas)} refeição(ões) · '
+               f'{pessoas} pessoas · <b>R$ {valor}</b>')
+
+    ok, detalhe = telegram_enviar_documento(
+        chat, relatorio_pdf.nome_arquivo(fluxo, data_iso), pdf, legenda)
+    if ok:
+        print(f'📄 PDF {fluxo} de {data_iso} enviado ({len(pdf)} bytes)', flush=True)
+    else:
+        print(f'🚨 PDF {fluxo} de {data_iso} não saiu: {detalhe}', flush=True)
+    return ok, detalhe
+
+
 def _repintar_relatorio(chat, message_id, fluxo, data_iso):
     """Redesenha o relatório depois de uma decisão."""
     texto, botoes = _montar_relatorio(fluxo, data_iso)
@@ -1024,12 +1113,23 @@ def _worker_relatorio_diario():
                 _tg_salvar(estado)
 
             for fluxo in (FLUXO_PAGCORP, FLUXO_FECHAMENTO):
+                # Duas peças por grupo, e nessa ordem: primeiro o resumo com
+                # os botões, que é o que ela precisa para decidir; depois o
+                # PDF de gerência, que é para conferir e arquivar. Se o PDF
+                # falhar, o resumo já saiu — um não derruba o outro.
                 try:
                     ok, detalhe = enviar_relatorio_diario(fluxo, hoje)
                     if not ok:
                         print(f'ℹ️ Relatório {fluxo} não enviado: {detalhe}', flush=True)
                 except Exception as e:
                     print(f'❌ Relatório {fluxo}: {e}', flush=True)
+
+                try:
+                    ok, detalhe = enviar_relatorio_pdf(fluxo, hoje)
+                    if not ok:
+                        print(f'ℹ️ PDF {fluxo} não enviado: {detalhe}', flush=True)
+                except Exception as e:
+                    print(f'❌ PDF {fluxo}: {e}', flush=True)
         except Exception as e:
             print(f'❌ Worker do relatório: {e}', flush=True)
 
