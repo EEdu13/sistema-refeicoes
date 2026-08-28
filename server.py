@@ -684,6 +684,18 @@ def _resgatar_aprovacoes_perdidas():
         FROM PEDIDOS
         WHERE APROVADO IS NULL
           AND PAGCORP IS NOT NULL AND LTRIM(RTRIM(PAGCORP)) <> ''
+          -- SÓ pedido que o app marcou como PAGCORP.
+          --
+          -- Ter PAGCORP preenchido não basta: pedido de Fechamento também
+          -- carrega o número do cartão, e ele NÃO passa por aprovação — quem
+          -- paga é o fechamento do mês. Filtrando só pelo cartão, mandei
+          -- Fechamento para o grupo da Elaine sem necessidade.
+          --
+          -- A coluna FECHAMENTO também não serve de critério: uma trigger a
+          -- preenche a partir do cadastro do FORNECEDOR, então ela diz o que
+          -- o restaurante aceita, não como o pedido foi pago. O único sinal
+          -- confiável é o que o próprio app gravou ao enviar.
+          AND OBSERVACOES LIKE '%(PAGCORP)%'
           AND Criado >= CAST(DATEADD(day, -1, GETDATE()) AS DATE)
           AND Criado <= DATEADD(minute, -{IDADE_MINIMA_RESGATE}, GETDATE())
         ORDER BY ID
