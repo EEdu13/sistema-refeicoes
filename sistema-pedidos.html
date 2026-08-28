@@ -462,7 +462,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label>A contratar</label>
+                    <label id="rotuloAContratar">A contratar</label>
                     <div class="contador-pessoas">
                         <button type="button" class="contador-btn" onclick="mudarAContratar(-1)">−</button>
                         <span class="contador-valor" id="valorAContratar">0</span>
@@ -1284,14 +1284,25 @@
                 // ver pessoasDaRefeicao().
                 colaboradores: [],  // { nome, funcao, origem, refeicoes: [] }
                 extras: [],         // { nome, funcao, origem: LARSIL|EXTERNO, refeicoes: [] }
-                aContratar: 0,
+                aContratar: 0,      // vagas sem nome; vale quando NÃO separado
+                // Separado, cada refeição tem suas vagas: dá para precisar de
+                // 10 cafés e só 2 jantas sem nome definido. Um contador só
+                // para todas fazia o último número digitado valer para as
+                // outras duas.
+                aContratarRef: {},  // id da refeição -> vagas
                 separado: false,    // true = cada refeição tem sua própria lista
             };
         }
 
         /** Todo mundo desta frente, sem repetir (é o tamanho da turma). */
         function pessoasDaFrente(f) {
-            return f.colaboradores.length + f.extras.length + f.aContratar;
+            // Separada, as vagas de cada refeição são as MESMAS pessoas vistas
+            // em momentos diferentes do dia — somar daria gente inventada.
+            // A maior refeição é o teto de quanta gente sem nome existe.
+            const vagas = f.separado
+                ? Math.max(0, ...Object.values(f.aContratarRef || {}).map(Number))
+                : (f.aContratar || 0);
+            return f.colaboradores.length + f.extras.length + vagas;
         }
 
         function gentePorNome(f) {
@@ -1304,14 +1315,20 @@
          * Nem todo mundo come tudo: numa mesma frente, 10 tomam café e só 5
          * almoçam. Sem isso o pedido cobrava o café de quem só almoçou.
          *
-         * `aContratar` conta em todas as refeições: são vagas sem nome, não
-         * dá para dizer que "a vaga 2 só almoça".
+         * As vagas sem nome ("a contratar") entram aqui também. Separado,
+         * cada refeição tem as suas; junto, é um número só para todas.
          */
         function pessoasDaRefeicao(f, idRefeicao) {
             if (!f.separado) return pessoasDaFrente(f);
             const comem = gentePorNome(f)
                 .filter(p => (p.refeicoes || []).includes(idRefeicao)).length;
-            return comem + f.aContratar;
+            return comem + vagasDaRefeicao(f, idRefeicao);
+        }
+
+        /** Vagas sem nome desta refeição (ou da frente, se não separada). */
+        function vagasDaRefeicao(f, idRefeicao) {
+            if (!f.separado) return f.aContratar || 0;
+            return (f.aContratarRef || {})[idRefeicao] || 0;
         }
 
         function nomesDaRefeicao(f, idRefeicao) {
@@ -2797,7 +2814,7 @@
 
             renderExtras();
             renderAbasRefeicao();
-            document.getElementById('valorAContratar').textContent = PedidoState.aContratar;
+            pintarAContratar();
             document.getElementById('pedidoMotivo').value = PedidoState.motivo;
             atualizarRotuloTodos();
         }
@@ -2827,6 +2844,19 @@
             f.separado = separar;
             const todas = PedidoState.refeicoes.slice();
             gentePorNome(f).forEach(p => { p.refeicoes = todas.slice(); });
+
+            // As vagas sem nome acompanham a mudança, para o total não pular
+            // sozinho: ao separar, cada refeição herda o número que valia
+            // para todas; ao juntar, fica a maior — reduzir por conta
+            // própria tiraria comida de alguém.
+            if (separar) {
+                f.aContratarRef = {};
+                todas.forEach(id => { f.aContratarRef[id] = f.aContratar || 0; });
+            } else {
+                f.aContratar = Math.max(
+                    0, ...Object.values(f.aContratarRef || {}).map(Number));
+                f.aContratarRef = {};
+            }
 
             refeicaoAtivaPessoas = PedidoState.refeicoes[0] || '';
             renderPessoas();
@@ -3028,10 +3058,47 @@
         }
 
         function mudarAContratar(delta) {
-            PedidoState.aContratar = Math.max(0, Math.min(50, PedidoState.aContratar + delta));
-            document.getElementById('valorAContratar').textContent = PedidoState.aContratar;
+            const f = PedidoState.frente;
+            const limite = v => Math.max(0, Math.min(50, v));
+
+            if (f.separado) {
+                const ref = refeicaoSelecionada();
+                if (!f.aContratarRef) f.aContratarRef = {};
+                f.aContratarRef[ref] = limite((f.aContratarRef[ref] || 0) + delta);
+            } else {
+                PedidoState.aContratar = limite(PedidoState.aContratar + delta);
+            }
+
+            pintarAContratar();
             atualizarRotuloTodos();
+            renderAbasRefeicao();
             renderCabecalhoFrente();
+        }
+
+        /**
+         * Mostra o contador da refeição aberta, e diz de qual refeição é.
+         *
+         * Sem esse rótulo o contador parecia valer para o pedido inteiro
+         * mesmo estando embaixo das abas — e quem preenchia refeição por
+         * refeição sobrescrevia o mesmo número três vezes.
+         */
+        function pintarAContratar() {
+            const f = PedidoState.frente;
+            const campo = document.getElementById('valorAContratar');
+            if (campo) {
+                campo.textContent = f.separado
+                    ? vagasDaRefeicao(f, refeicaoSelecionada())
+                    : (f.aContratar || 0);
+            }
+
+            const rotulo = document.getElementById('rotuloAContratar');
+            if (!rotulo) return;
+            if (!f.separado) {
+                rotulo.textContent = 'A contratar';
+                return;
+            }
+            const r = REFEICOES.find(x => x.id === refeicaoSelecionada());
+            rotulo.textContent = 'A contratar · ' + (r ? r.nome : 'refeição');
         }
 
         /**
@@ -3270,7 +3337,10 @@
 
             const somaEquipe = PedidoState.frentes.reduce((s, f) => s + f.colaboradores.length, 0);
             const somaExtras = PedidoState.frentes.reduce((s, f) => s + f.extras.length, 0);
-            const somaContratar = PedidoState.frentes.reduce((s, f) => s + f.aContratar, 0);
+            // Separada, a frente conta a maior refeição (ver pessoasDaFrente)
+            const somaContratar = PedidoState.frentes.reduce((s, f) => s + (f.separado
+                ? Math.max(0, ...Object.values(f.aContratarRef || {}).map(Number))
+                : (f.aContratar || 0)), 0);
 
             const linhasPessoas = [['Equipe', somaEquipe + ' pessoa(s)']];
             if (somaExtras) linhasPessoas.push(['Somados', somaExtras + ' pessoa(s)']);
@@ -3364,7 +3434,7 @@
                             fornecedor: forn.nome,
                             valor_pago: forn.valor,
                             total_colaboradores: pessoasFrente,
-                            a_contratar: frente.aContratar,
+                            a_contratar: vagasDaRefeicao(frente, id),
 
                             projeto: projeto,
                             equipe: equipe,
