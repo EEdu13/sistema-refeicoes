@@ -19,6 +19,7 @@ import requests
 from dotenv import load_dotenv
 
 import relatorio_pdf
+import consulta_fechamento
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -1197,6 +1198,112 @@ def _worker_relatorio_diario():
             print(f'❌ Worker do relatório: {e}', flush=True)
 
 
+# ==========================================================================
+# CONSULTA DE FECHAMENTO POR FORNECEDOR
+#
+# O fornecedor mantém uma folha de contagem no balcão. Este comando devolve
+# a nossa contagem no mesmo formato — por dia — para a conferência ser linha
+# a linha, e não uma caça a pedido perdido no meio de uma lista.
+# ==========================================================================
+def _fornecedores_no_periodo(de, ate):
+    """Nomes de fornecedor que aparecem no período, com quantos pedidos."""
+    linhas = executar_query("""
+        SELECT FORNECEDOR, COUNT(*) N FROM PEDIDOS
+        WHERE CAST(DATA_RETIRADA AS DATE) BETWEEN CAST(%s AS DATE) AND CAST(%s AS DATE)
+          AND ISNULL(FORNECEDOR,'') <> ''
+        GROUP BY FORNECEDOR
+    """, [de.isoformat(), ate.isoformat()]) or []
+    return [(l['FORNECEDOR'], int(l['N'] or 0)) for l in linhas]
+
+
+def _pedidos_do_fornecedor(fornecedor, de, ate):
+    return executar_query("""
+        SELECT DATA_RETIRADA, LIDER, TIPO_REFEICAO, VALOR_PAGO,
+               TOTAL_COLABORADORES, TOTAL_PAGAR, ISNULL(APROVADO,'') APROVADO
+        FROM PEDIDOS
+        WHERE FORNECEDOR = %s
+          AND CAST(DATA_RETIRADA AS DATE) BETWEEN CAST(%s AS DATE) AND CAST(%s AS DATE)
+        ORDER BY DATA_RETIRADA, TIPO_REFEICAO
+    """, [fornecedor, de.isoformat(), ate.isoformat()]) or []
+
+
+AJUDA_FECHAMENTO = (
+    'Diga o fornecedor e o período. Por exemplo:\n\n'
+    '<code>fechamento 1 a 15 de setembro do restaurante carreiro</code>\n'
+    '<code>fechamento carreiro 01/09 a 15/09</code>\n'
+    '<code>fechamento sabor mineiro setembro</code>\n'
+    '<code>fechamento joice gomes ontem</code>\n\n'
+    'Sem período, uso o mês atual.'
+)
+
+
+def _responder_fechamento(chat, texto):
+    """Trata 'fechamento ...' vindo de um dos grupos registrados."""
+    hoje = datetime.now(pytz.timezone('America/Sao_Paulo')).date()
+    busca, de, ate = consulta_fechamento.interpretar(texto, hoje)
+    esc = consulta_fechamento._esc
+
+    if not busca:
+        telegram_enviar(chat, '📋 <b>Fechamento por fornecedor</b>\n\n'
+                              + AJUDA_FECHAMENTO)
+        return
+
+    # Sem período: mês corrente. Dizer isso na resposta evita ela conferir
+    # contra a folha errada achando que pediu outra coisa.
+    presumido = de is None
+    if presumido:
+        de, ate = hoje.replace(day=1), hoje
+
+    candidatos = _fornecedores_no_periodo(de, ate)
+    achados = consulta_fechamento.casar_fornecedor(busca, candidatos)
+    confiaveis = [n for peso, n in achados
+                  if peso <= consulta_fechamento.PESO_CONFIAVEL]
+
+    if not achados:
+        nomes = sorted({n for n, _ in candidatos}, key=str.upper)[:15]
+        aviso = (f'Não achei fornecedor parecido com <b>{esc(busca)}</b> entre '
+                 f'{de.strftime("%d/%m/%Y")} e {ate.strftime("%d/%m/%Y")}.')
+        if nomes:
+            lista = '\n'.join('• ' + esc(n) for n in nomes)
+            aviso += f'\n\nQuem aparece no período:\n{lista}'
+        telegram_enviar(chat, aviso)
+        return
+
+    # Nada confiável, só palpite fraco: oferece, não escolhe. Devolver o
+    # fechamento do fornecedor errado sem avisar é pior do que perguntar.
+    if not confiaveis:
+        lista = '\n'.join('• ' + esc(n) for _, n in achados[:10])
+        telegram_enviar(chat,
+                        f'Não tenho certeza de qual fornecedor é '
+                        f'<b>{esc(busca)}</b>. Algum destes?\n\n{lista}')
+        return
+
+    exato = consulta_fechamento._chave(confiaveis[0]) == consulta_fechamento._chave(busca)
+    if len(confiaveis) > 1 and not exato:
+        lista = '\n'.join('• ' + esc(n) for n in confiaveis[:10])
+        telegram_enviar(chat,
+                        f'Achei mais de um fornecedor para <b>{esc(busca)}</b>. '
+                        f'Qual deles?\n\n{lista}')
+        return
+
+    fornecedor = confiaveis[0]
+    linhas = _pedidos_do_fornecedor(fornecedor, de, ate)
+    resposta = consulta_fechamento.montar(fornecedor, de, ate, linhas)
+    if presumido:
+        resposta += '\n\n<i>Período não informado — usei o mês atual.</i>'
+
+    # Nome exato que também é pedaço de outros: usa o exato, mas conta que
+    # havia parecidos. Sem isso ela confere contra a folha errada sem saber.
+    if exato and len(confiaveis) > 1:
+        outros = ', '.join(esc(n) for n in confiaveis[1:6])
+        resposta += (f'\n\n<i>Usei o nome exato. Também existem: {outros}.</i>')
+
+    for pedaco in consulta_fechamento.partir(resposta):
+        telegram_enviar(chat, pedaco)
+    print(f'📋 Fechamento consultado: {fornecedor} {de} a {ate} '
+          f'({len(linhas)} pedidos)', flush=True)
+
+
 def _tg_tratar_mensagem(msg):
     """
     /start <SENHA> registra quem aprova.
@@ -1208,6 +1315,25 @@ def _tg_tratar_mensagem(msg):
     texto = (msg.get('text') or '').strip()
     chat = str((msg.get('chat') or {}).get('id') or '')
     nome = ((msg.get('from') or {}).get('first_name') or 'você')
+
+    # Consulta de fechamento: aceita com ou sem barra, porque em conversa
+    # normal ninguém lembra da barra. Só vale nos grupos registrados — a
+    # resposta expõe quanto se gastou com cada fornecedor.
+    primeira = re.sub(r'^/', '', texto.split()[0].lower()) if texto.split() else ''
+    if primeira.split('@')[0] in ('fechamento', 'historico', 'histórico'):
+        autorizados = {str(telegram_chat_do_fluxo(f))
+                       for f in (FLUXO_PAGCORP, FLUXO_FECHAMENTO)} - {'', 'None'}
+        if chat not in autorizados:
+            print(f'🚫 Consulta de fechamento de chat não autorizado ({chat})',
+                  flush=True)
+            return
+        try:
+            _responder_fechamento(chat, texto)
+        except Exception as e:
+            print(f'❌ Consulta de fechamento ({texto!r}): {e}', flush=True)
+            telegram_enviar(chat, 'Não consegui montar esse fechamento. '
+                                  'Tente assim:\n\n' + AJUDA_FECHAMENTO)
+        return
 
     if not texto.startswith('/start'):
         return
