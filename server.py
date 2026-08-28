@@ -433,8 +433,32 @@ def telegram_pedir_aprovacao(resumo, ids):
         f"💳 <b>PAGCORP:</b> {esc(resumo.get('pagcorp'))}",
         f"📅 <b>Data:</b> {esc(resumo.get('data'))}",
         f"📍 <b>Cidade:</b> {esc(resumo.get('cidade'))}",
+    ]
+
+    # A conta aberta, uma refeição por linha.
+    #
+    # Antes ia só "Refeições: café, almoço" + o total. Quem aprova via o
+    # valor final sem ter como conferir de onde saiu — e é justamente o
+    # unitário que revela um preço fora do combinado. Com pessoas × preço
+    # por refeição, a soma dá para conferir de cabeça.
+    itens = resumo.get('itens') or []
+    if itens:
+        linhas.append('🍴 <b>Refeições</b>')
+        for it in itens:
+            local = esc(it.get('local') or '')
+            pessoas = esc(it.get('pessoas'))
+            valor = esc(it.get('valor'))
+            subtotal = esc(it.get('subtotal'))
+            linhas.append(f"  • {esc(it.get('refeicao'))}"
+                          + (f" — {local}" if local else ''))
+            linhas.append(f"     {esc(it.get('fornecedor'))}")
+            linhas.append(f"     {pessoas} × R$ {valor} = <b>R$ {subtotal}</b>")
+    else:
+        # Pedido antigo, sem o detalhamento: mantém o formato de antes
+        linhas.append(f"🍴 <b>Refeições:</b> {esc(resumo.get('refeicoes'))}")
+
+    linhas += [
         '',
-        f"🍴 <b>Refeições:</b> {esc(resumo.get('refeicoes'))}",
         f"👥 <b>Pessoas:</b> {esc(resumo.get('pessoas'))}",
         f"💰 <b>Total:</b> R$ {esc(resumo.get('total'))}",
     ]
@@ -621,6 +645,124 @@ def _tg_tratar_callback(cb):
                   f'devolutiva não enviada', flush=True)
 
     threading.Thread(target=_finalizar_decisao, daemon=True).start()
+
+
+# ==========================================================================
+# REDE DE SEGURANÇA DAS APROVAÇÕES
+#
+# O envio da aprovação acontece no momento do pedido. Quando ele falha — e
+# falha: rede, timeout do Telegram, o app perdendo a resposta — o pedido
+# fica salvo com APROVADO nulo e NINGUÉM fica sabendo. O líder viu "Pedido
+# enviado", quem aprova nunca recebeu, e o depósito atrasa sem motivo
+# aparente. Já aconteceu dezenas de vezes.
+#
+# Este worker fecha esse buraco pelo lado do servidor: de tempos em tempos
+# procura pedido PAGCORP sem aprovação e reenvia. Não depende do app, nem
+# do aparelho, nem de alguém perceber.
+#
+# Só entra pedido com alguns minutos de vida — pedido recém-salvo pode
+# estar com o envio ainda em curso, e reenviar geraria mensagem dobrada.
+# ==========================================================================
+INTERVALO_RESGATE = 300      # 5 min entre varreduras
+IDADE_MINIMA_RESGATE = 3     # minutos de vida antes de considerar perdido
+DIAS_RESGATE = 3             # não mexe em histórico antigo
+MAX_POR_VARREDURA = 4        # ritmo: não inunda o grupo nem o Telegram
+
+
+def _resgatar_aprovacoes_perdidas():
+    """Uma varredura. Devolve quantos lotes foram reenviados."""
+    if not telegram_configurado() or not telegram_chat_aprovador():
+        return 0
+
+    linhas = executar_query(f"""
+        SELECT ID, LIDER, NOME_LIDER, PROJETO, PAGCORP, DATA_RETIRADA,
+               TIPO_REFEICAO, FORNECEDOR, VALOR_PAGO, TOTAL_COLABORADORES,
+               TOTAL_PAGAR, CIDADE_PRESTACAO_DO_SERVICO, OBSERVACOES
+        FROM PEDIDOS
+        WHERE APROVADO IS NULL
+          AND PAGCORP IS NOT NULL AND LTRIM(RTRIM(PAGCORP)) <> ''
+          AND Criado >= DATEADD(day, -{DIAS_RESGATE}, GETDATE())
+          AND Criado <= DATEADD(minute, -{IDADE_MINIMA_RESGATE}, GETDATE())
+        ORDER BY ID
+    """, []) or []
+
+    if not linhas:
+        return 0
+
+    # Mesma unidade da aprovação normal: dia + equipe + cartão
+    grupos = {}
+    for p in linhas:
+        chave = (p['LIDER'], str(p['DATA_RETIRADA']), p['PAGCORP'])
+        grupos.setdefault(chave, []).append(p)
+
+    reenviados = 0
+    for (lider, data, pagcorp), itens in sorted(grupos.items()):
+        # Um punhado por vez: quando há muita coisa represada, mandar tudo
+        # de uma vez vira uma parede de mensagens no grupo (e o Telegram
+        # limita rajada). O resto sai nas próximas varreduras.
+        if reenviados >= MAX_POR_VARREDURA:
+            print(f'⏸️ Resgate: {len(grupos) - reenviados} lote(s) ficam para a próxima varredura',
+                  flush=True)
+            break
+
+        base = itens[0]
+        ids = [int(p['ID']) for p in itens]
+
+        def fmt(v):
+            return f'{float(v or 0):.2f}'.replace('.', ',')
+
+        resumo = {
+            'solicitante': base.get('NOME_LIDER') or '—',
+            'projeto': base.get('PROJETO') or '',
+            'equipe': lider,
+            'pagcorp': pagcorp,
+            'data': (base['DATA_RETIRADA'].strftime('%d/%m/%Y')
+                     if hasattr(base['DATA_RETIRADA'], 'strftime') else str(data)),
+            'cidade': base.get('CIDADE_PRESTACAO_DO_SERVICO') or '',
+            'refeicoes': ', '.join(p.get('TIPO_REFEICAO') or '' for p in itens),
+            'itens': [{
+                'refeicao': p.get('TIPO_REFEICAO') or '',
+                'fornecedor': p.get('FORNECEDOR') or '—',
+                'local': '',
+                'pessoas': p.get('TOTAL_COLABORADORES') or 0,
+                'valor': fmt(p.get('VALOR_PAGO')),
+                'subtotal': fmt(p.get('TOTAL_PAGAR')),
+            } for p in itens],
+            'pessoas': max((p.get('TOTAL_COLABORADORES') or 0) for p in itens),
+            'total': fmt(sum(float(p.get('TOTAL_PAGAR') or 0) for p in itens)),
+            'motivo': 'Reenvio automático — o envio no momento do pedido não saiu.',
+        }
+
+        ok, detalhe = telegram_pedir_aprovacao(resumo, ids)
+        if not ok:
+            print(f'⚠️ Resgate falhou para {lider}/{data}: {detalhe}', flush=True)
+            continue
+
+        marcadores = ', '.join(['%s'] * len(ids))
+        executar_query(
+            f"UPDATE PEDIDOS SET APROVADO = 'AGUARDANDO' "
+            f"WHERE ID IN ({marcadores}) AND APROVADO IS NULL", ids)
+
+        # Sem isto a decisão cairia no plano B (por horário) — e é aqui que
+        # sabemos exatamente quais pedidos entraram nesta mensagem.
+        registrar_solicitante(str(min(ids)), {
+            'login': '', 'nome': base.get('NOME_LIDER') or '',
+            'telefone': '', 'pedidos': ids, 'equipe': lider,
+        })
+
+        reenviados += 1
+        print(f'🛟 Aprovação resgatada: {lider} {data} — pedidos {ids}', flush=True)
+
+    return reenviados
+
+
+def _worker_resgate_aprovacoes():
+    while True:
+        time.sleep(INTERVALO_RESGATE)
+        try:
+            _resgatar_aprovacoes_perdidas()
+        except Exception as e:
+            print(f'❌ Worker de resgate: {e}', flush=True)
 
 
 def _tg_tratar_mensagem(msg):
@@ -2970,6 +3112,15 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 # o aviso de status continua no WhatsApp, mais adiante.
                 ok, detalhe = telegram_pedir_aprovacao(resumo, ids)
 
+                # Falha aqui e' silenciosa pro usuario (o app engole o erro),
+                # entao ela precisa gritar no log — foi so' com log que deu
+                # pra descobrir por que a Elaine nao recebia certos pedidos.
+                if not ok:
+                    print(f'🚨 APROVACAO NAO SAIU para {ids} '
+                          f'(equipe {resumo.get("equipe")}, {resumo.get("solicitante")}): '
+                          f'{detalhe} — o worker de resgate tenta de novo em ate 5 min',
+                          flush=True)
+
                 # Marca como pendente para o webhook saber o que atualizar
                 if ok:
                     for pid in ids:
@@ -3773,6 +3924,9 @@ def main():
 
     # Escuta as decisões de aprovação (long-polling, sem webhook)
     threading.Thread(target=_worker_telegram, daemon=True).start()
+
+    # Pesca as aprovações que não saíram no momento do pedido
+    threading.Thread(target=_worker_resgate_aprovacoes, daemon=True).start()
 
     # Reprocessa o que ficou na fila de envios anteriores
     threading.Thread(target=processar_fila_blob, daemon=True).start()

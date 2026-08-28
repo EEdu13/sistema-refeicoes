@@ -3428,6 +3428,12 @@
                                         .filter(Boolean).join(' + '),
                                     refeicoes: PedidoState.refeicoes
                                         .map(i => REFEICOES.find(r => r.id === i).nome).join(', '),
+                                    // A conta aberta para quem aprova: sem o
+                                    // unitário, ela vê o total sem ter como
+                                    // conferir de onde saiu — e é o preço por
+                                    // refeição que denuncia valor fora do
+                                    // combinado.
+                                    itens: montarItensAprovacao(),
                                     pessoas: pessoas,
                                     total: PedidoState.total.toFixed(2).replace('.', ','),
                                     motivo: PedidoState.motivo.trim(),
@@ -3492,6 +3498,40 @@
                 botao.textContent = textoOriginal;
                 if (loading) loading.style.display = 'none';
             }
+        }
+
+        /**
+         * Detalhamento por refeição para a mensagem de aprovação.
+         *
+         * Uma linha por refeição de cada frente, com o preço unitário e a
+         * conta feita. Quem aprova precisa enxergar "13 × R$ 22,00 = R$ 286",
+         * não só o total — é o unitário que mostra se o preço combinado está
+         * sendo respeitado.
+         */
+        function montarItensAprovacao() {
+            const itens = [];
+            PedidoState.frentes.forEach((frente, i) => {
+                PedidoState.refeicoes.forEach(id => {
+                    const r = REFEICOES.find(x => x.id === id);
+                    const forn = frente.fornecedores[id];
+                    if (!r || !forn) return;
+
+                    const n = pessoasDaRefeicao(frente, id);
+                    if (n === 0) return;   // ninguém come: não entra na conta
+
+                    const valor = forn.valor || 0;
+                    itens.push({
+                        refeicao: r.nome,
+                        fornecedor: forn.nome || '—',
+                        // O local só faz sentido quando há mais de um
+                        local: PedidoState.dividido ? nomeDaFrente(frente, i) : '',
+                        pessoas: n,
+                        valor: valor.toFixed(2).replace('.', ','),
+                        subtotal: (valor * n).toFixed(2).replace('.', ','),
+                    });
+                });
+            });
+            return itens;
         }
 
         function resumoParaPopup() {
