@@ -2366,7 +2366,8 @@ input[type="radio"], input[type="checkbox"] { accent-color: var(--lar-green); wi
     box-shadow: 0 20px 44px -18px rgba(0, 0, 0, .8);
     overflow: hidden;
     animation: larCardIn .4s var(--ease) both;
-    transition: border-color var(--t-rapida), transform .12s, box-shadow var(--t-rapida);
+    transition: border-color var(--t-rapida), transform .18s var(--ease),
+                box-shadow var(--t-rapida), opacity .18s, filter .18s;
 }
 button.cartao { cursor: pointer; }
 button.cartao:active { transform: scale(.985); }
@@ -2377,8 +2378,21 @@ button.cartao:active { transform: scale(.985); }
     border-color: var(--lar-green);
     box-shadow: 0 0 0 2px var(--lar-green), 0 20px 44px -18px rgba(0, 0, 0, .8);
 }
-.cartao:not(.escolhido) { opacity: .82; }
-.cartoes-grade:not(.varios) .cartao { opacity: 1; }
+/* Depois da escolha, o resto recua de verdade. Os cartoes sao todos do
+   mesmo verde, entao um apagamento timido ainda deixava a duvida "qual
+   esta valendo?" — que foi a reclamacao. So vale quando ha escolha: sem
+   ela, todos aparecem cheios e igualmente convidativos. */
+.cartoes-grade.tem-escolhido .cartao:not(.escolhido) {
+    opacity: .34;
+    filter: saturate(.4);
+    transform: scale(.96);
+}
+.cartoes-grade.tem-escolhido .cartao:not(.escolhido):hover,
+.cartoes-grade.tem-escolhido .cartao:not(.escolhido):focus-visible {
+    opacity: .72;
+    filter: saturate(.8);
+}
+.cartoes-grade:not(.varios) .cartao { opacity: 1; filter: none; transform: none; }
 
 .cartao-visto {
     display: inline-flex;

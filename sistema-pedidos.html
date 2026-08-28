@@ -2048,14 +2048,33 @@
             }
 
             const grade = document.createElement('div');
-            grade.className = 'cartoes-grade' + (lista.length > 1 ? ' varios' : '');
+            // 'tem-escolhido' liga o apagamento dos demais. Sem escolha
+            // ainda, todos ficam cheios: nao ha o que destacar.
+            grade.className = 'cartoes-grade'
+                + (lista.length > 1 ? ' varios' : '')
+                + (atual ? ' tem-escolhido' : '');
 
+            let alvo = null;
             lista.forEach(c => {
                 const escolhido = atual && String(atual.CONTA) === String(c.CONTA);
-                grade.appendChild(montarCartao(c, escolhido, lista.length > 1));
+                const no = montarCartao(c, escolhido, lista.length > 1);
+                if (escolhido) alvo = no;
+                grade.appendChild(no);
             });
 
             caixa.appendChild(grade);
+
+            // O clique redesenha a grade, e a rolagem do carrossel volta ao
+            // inicio — o cartao recem-escolhido sairia de vista bem na hora
+            // de confirmar a escolha.
+            //
+            // Mexe no scrollLeft da propria grade em vez de scrollIntoView:
+            // aquele rola qualquer ancestral que precise, inclusive a
+            // pagina, e tela pulando sozinha ja deu problema antes aqui.
+            if (alvo && lista.length > 1) {
+                grade.scrollLeft = Math.max(
+                    0, alvo.offsetLeft - (grade.clientWidth - alvo.clientWidth) / 2);
+            }
         }
 
         /** Um cartão desenhado. `selecionavel` liga o toque e a marca de escolhido. */
