@@ -1508,6 +1508,28 @@ input[type="radio"], input[type="checkbox"] { accent-color: var(--lar-green); wi
 .picker-opcao-check { color: var(--lar-green); font-size: 15px; flex-shrink: 0; opacity: 0; }
 .picker-opcao.marcada .picker-opcao-check { opacity: 1; }
 
+/* Quem ja esta no pedido (ou noutra frente) aparece, mas apagado e sem
+   toque: sumir da lista faria a pessoa procurar um nome que existe. */
+.picker-opcao.bloqueada {
+    opacity: .45;
+    cursor: not-allowed;
+}
+.picker-opcao.bloqueada:hover {
+    background: var(--lar-surface-2);
+    border-color: var(--lar-line);
+}
+
+/* Rodape fixo com o total marcado. So aparece quando ha marcacao, senao
+   rouba altura da lista sem servir para nada. */
+.picker-rodape {
+    position: sticky;
+    bottom: 0;
+    padding-top: 10px;
+    margin-top: 4px;
+    background: linear-gradient(to top, var(--lar-surface) 72%, transparent);
+}
+.picker-rodape .btn { width: 100%; margin: 0; }
+
 .picker-vazio { text-align: center; padding: 26px 16px; color: var(--lar-soft); font-size: 13px; }
 
 /* ==========================================================================
@@ -2410,6 +2432,23 @@ button.cartao:active { transform: scale(.985); }
     border-color: var(--lar-green);
     box-shadow: 0 0 0 2px var(--lar-green), 0 20px 44px -18px rgba(0, 0, 0, .8);
 }
+
+/* Cartao de outro titular: sai do verde "tudo certo" e vai para ambar de
+   atencao. O tamanho do heroi ja grita que ele esta selecionado; a cor
+   precisa dizer que ele nao e seu. */
+.cartao.de-outro {
+    border-color: #D08700;
+    box-shadow: 0 0 0 2px #D08700, 0 20px 44px -18px rgba(0, 0, 0, .8);
+}
+.cartao.de-outro .cartao-visto { background: #D08700; color: #2A1A00; }
+.cartao.de-outro .cartao-marca { color: #F0B429; }
+
+.lar-aviso.alerta {
+    border-color: #D08700;
+    background: rgba(208, 135, 0, .12);
+    color: var(--lar-forte);
+}
+.etapa-ajuda.aviso-forte { color: #B45309; font-weight: 700; }
 
 .cartao-visto {
     display: inline-flex;

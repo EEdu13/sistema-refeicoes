@@ -307,7 +307,7 @@
             <!-- ETAPA 1 — cartão PAGCORP -->
             <div class="etapa hidden" data-etapa="1">
                 <h2 class="etapa-titulo">Cartão PAGCORP</h2>
-                <p class="etapa-ajuda">Este é o cartão vinculado a você. Dá para pedir em outro, se precisar.</p>
+                <p class="etapa-ajuda" id="ajudaCartao">Este é o cartão vinculado a você. Dá para pedir em outro, se precisar.</p>
 
                 <div id="cartaoAtual"></div>
 
@@ -601,6 +601,10 @@
                     <input type="text" class="form-control picker-busca" id="buscaLarsil"
                            placeholder="Digite o nome…" autocomplete="off" spellcheck="false">
                     <div class="picker-lista" id="listaLarsil"></div>
+                    <div class="picker-rodape hidden" id="rodapeLarsil">
+                        <button type="button" class="btn btn-primary" id="btnSomarLarsil"
+                                onclick="somarSelecionadosLarsil()">Somar</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2055,14 +2059,7 @@
                 lista.unshift(atual);
             }
 
-            if (lista.length > 1) {
-                const dica = document.createElement('p');
-                dica.className = 'etapa-ajuda';
-                dica.style.marginTop = '0';
-                dica.textContent = `Você responde por ${lista.length} cartões. `
-                    + 'Toque no que vai usar neste pedido.';
-                caixa.appendChild(dica);
-            }
+            const ehMeu = c => meus.some(m => String(m.CONTA) === String(c.CONTA));
 
             // Herói + miniaturas: o escolhido aparece grande, e os outros
             // ficam pequenos acima dele. Tocar num pequeno o promove a
@@ -2077,6 +2074,54 @@
             const outros = lista.filter(
                 c => String(c.CONTA) !== String(principal.CONTA));
 
+            // Pedir no cartão de outra pessoa é legítimo — acontece quando o
+            // titular está fora. O que não pode é acontecer sem ele perceber:
+            // o cartão escolhido vira o maior da tela, e antes vinha com o
+            // texto "este é o cartão vinculado a você" por cima. Alguém já
+            // pediu no cartão de outro achando que era o seu.
+            const deOutro = !ehMeu(principal);
+
+            const ajuda = document.getElementById('ajudaCartao');
+            if (ajuda) {
+                ajuda.textContent = deOutro
+                    ? 'Atenção: você escolheu o cartão de outra pessoa.'
+                    : 'Este é o cartão vinculado a você. Dá para pedir em outro, se precisar.';
+                ajuda.classList.toggle('aviso-forte', deOutro);
+            }
+
+            if (deOutro) {
+                const alerta = document.createElement('div');
+                alerta.className = 'lar-aviso alerta';
+                const dono = (principal.LIDER || '').trim();
+                alerta.textContent = dono
+                    ? `Este cartão é de ${dono}. O pedido será lançado nele.`
+                    : 'Este cartão não está vinculado a você. O pedido será lançado nele.';
+                caixa.appendChild(alerta);
+
+                if (meus.length) {
+                    const voltar = document.createElement('button');
+                    voltar.type = 'button';
+                    voltar.className = 'btn btn-sm';
+                    voltar.style.marginBottom = '10px';
+                    voltar.textContent = 'Usar o meu cartão';
+                    voltar.onclick = () => {
+                        const m = meus[0];
+                        PedidoState.cartao = {
+                            CONTA: m.CONTA, CC: m.CC || '', LIDER: m.LIDER || '',
+                        };
+                        renderCartao();
+                    };
+                    caixa.appendChild(voltar);
+                }
+            } else if (lista.length > 1) {
+                const dica = document.createElement('p');
+                dica.className = 'etapa-ajuda';
+                dica.style.marginTop = '0';
+                dica.textContent = `Você responde por ${meus.length} cartões. `
+                    + 'Toque no que vai usar neste pedido.';
+                caixa.appendChild(dica);
+            }
+
             const pilha = document.createElement('div');
             pilha.className = 'cartoes-pilha';
 
@@ -2087,7 +2132,9 @@
                 pilha.appendChild(fila);
             }
 
-            pilha.appendChild(montarCartao(principal, lista.length > 1, false));
+            const heroi = montarCartao(principal, lista.length > 1, false);
+            if (deOutro) heroi.classList.add('de-outro');
+            pilha.appendChild(heroi);
             caixa.appendChild(pilha);
         }
 
@@ -2534,16 +2581,37 @@
             lista.appendChild(carregando);
 
             let dados = { na_cidade: [], outros: [] };
+            let falhou = false;
             try {
                 const r = await SESSION.apiFetch('/api/fornecedores-cidade?cidade='
                     + encodeURIComponent(PedidoState.cidade || '')
                     + '&tipo=' + encodeURIComponent(tipo));
+                if (!r.ok) throw new Error('HTTP ' + r.status);
                 dados = await r.json();
             } catch (e) {
+                falhou = true;
                 console.warn('Falha ao buscar fornecedores:', e);
             }
 
             lista.replaceChildren();
+
+            // Antes a falha caía numa lista vazia e muda: parecia que o
+            // restaurante não estava cadastrado, e no Fechamento não há nem o
+            // campo manual como saída — a pessoa travava ali sem entender.
+            if (falhou) {
+                const erro = document.createElement('div');
+                erro.className = 'lar-aviso alerta';
+                erro.textContent = 'Não consegui carregar os restaurantes '
+                    + '(sinal ruim?). Nada foi perdido — tente de novo.';
+                lista.appendChild(erro);
+
+                const tentar = document.createElement('button');
+                tentar.type = 'button';
+                tentar.className = 'btn btn-sm';
+                tentar.textContent = 'Tentar de novo';
+                tentar.onclick = () => carregarFornecedoresDaRefeicao(id, tipo);
+                lista.appendChild(tentar);
+            }
 
             function opcao(f) {
                 const b = document.createElement('button');
@@ -3141,89 +3209,179 @@
 
         // --- busca na empresa toda ---
         let buscaLarsilTimer = null;
+        let listaLarsilCache = null;      // 400 e poucas pessoas: cabe na memória
+        const selecaoLarsil = new Set();  // nomes marcados no popup
 
         function abrirBuscaLarsil() {
             document.getElementById('buscaLarsil').value = '';
-            document.getElementById('listaLarsil').replaceChildren();
-            document.getElementById('totalLarsil').textContent = 'Busque por nome';
+            selecaoLarsil.clear();
             document.getElementById('folhaLarsil').classList.remove('hidden');
+            carregarLarsil();
         }
 
         function fecharBuscaLarsil() {
             document.getElementById('folhaLarsil').classList.add('hidden');
         }
 
-        async function buscarLarsil(termo) {
-            const lista = document.getElementById('listaLarsil');
+        /**
+         * Carrega a lista inteira UMA vez e guarda.
+         *
+         * Antes cada tecla ia ao servidor, e em sinal de campo ruim isso
+         * ficava travando na cara de quem digitava. Com a lista em mãos, o
+         * filtro é instantâneo — e quem não lembra o nome exato acha
+         * rolando, porque agora ela vem toda, em ordem alfabética.
+         */
+        async function carregarLarsil() {
             const total = document.getElementById('totalLarsil');
 
-            if (termo.trim().length < 2) {
-                lista.replaceChildren();
-                total.textContent = 'Digite ao menos 2 letras';
+            if (listaLarsilCache) {
+                renderListaLarsil('');
                 return;
             }
 
-            total.textContent = 'Procurando…';
-            let achados = [];
+            total.textContent = 'Carregando…';
             try {
-                const r = await SESSION.apiFetch('/api/colaboradores-busca?q=' + encodeURIComponent(termo));
+                const r = await SESSION.apiFetch('/api/colaboradores-busca?q=');
                 const d = await r.json();
-                achados = d.colaboradores || [];
-            } catch (e) { /* mostra vazio abaixo */ }
+                listaLarsilCache = d.colaboradores || [];
+            } catch (e) {
+                listaLarsilCache = null;
+                total.textContent = 'Não consegui carregar. Digite o nome para buscar.';
+                return;
+            }
+            renderListaLarsil('');
+        }
+
+        /** Por que esta pessoa não pode ser somada agora (ou null). */
+        function impedimentoLarsil(nome) {
+            if (PedidoState.colaboradores.some(x => x.nome === nome)
+                || PedidoState.extras.some(x => x.nome === nome)) {
+                return 'já está na lista';
+            }
+            // Conferir só a frente ativa deixava passar a mesma pessoa em duas
+            // frentes — e ela seria cobrada nas duas cidades.
+            const outra = frenteDaPessoa(nome);
+            return outra ? ('já está em ' + outra.nome) : null;
+        }
+
+        function renderListaLarsil(termo) {
+            const lista = document.getElementById('listaLarsil');
+            const total = document.getElementById('totalLarsil');
+            const alvo = (termo || '').trim().toUpperCase();
+
+            const base = (listaLarsilCache || []).filter(
+                c => !alvo || String(c.NOME || '').toUpperCase().includes(alvo));
 
             lista.replaceChildren();
-            total.textContent = achados.length + ' encontrado(s)';
+            total.textContent = alvo
+                ? base.length + ' encontrado(s)'
+                : base.length + ' pessoas · toque para marcar';
 
-            if (achados.length === 0) {
+            if (base.length === 0) {
                 const v = document.createElement('div');
                 v.className = 'picker-vazio';
                 v.textContent = 'Ninguém com esse nome.';
                 lista.appendChild(v);
+                atualizarRodapeLarsil();
                 return;
             }
 
-            achados.forEach(c => {
+            base.forEach(c => {
+                const nome = c.NOME;
+                const bloqueio = impedimentoLarsil(nome);
+
                 const b = document.createElement('button');
                 b.type = 'button';
-                b.className = 'picker-opcao';
+                b.className = 'picker-opcao'
+                    + (selecaoLarsil.has(nome) ? ' marcada' : '')
+                    + (bloqueio ? ' bloqueada' : '');
+                b.disabled = !!bloqueio;
 
                 const t = document.createElement('span');
                 t.className = 'picker-opcao-nome';
-                t.textContent = c.NOME;
-                const s = document.createElement('small');
-                s.style.display = 'block';
-                s.style.color = 'var(--lar-muted)';
-                s.style.fontSize = '12.5px';
-                s.textContent = [c.FUNCAO, c.EQUIPE, c.EMPRESA].filter(Boolean).join(' · ');
-                t.appendChild(s);
-
+                t.textContent = nome;
+                const sub = document.createElement('small');
+                sub.style.display = 'block';
+                sub.style.color = 'var(--lar-muted)';
+                sub.style.fontSize = '12.5px';
+                sub.textContent = bloqueio
+                    ? bloqueio
+                    : [c.FUNCAO, c.EQUIPE, c.EMPRESA].filter(Boolean).join(' · ');
+                t.appendChild(sub);
                 b.appendChild(t);
-                b.onclick = () => {
-                    if (PedidoState.colaboradores.some(x => x.nome === c.NOME)
-                        || PedidoState.extras.some(x => x.nome === c.NOME)) {
-                        SESSION.toast(c.NOME + ' já está na lista.', 'aviso');
-                        return;
-                    }
-                    // Conferir só a frente ativa deixava passar a mesma pessoa
-                    // em duas frentes por esta busca — e ela seria cobrada nas
-                    // duas cidades.
-                    const outra = frenteDaPessoa(c.NOME);
-                    if (outra) {
-                        SESSION.toast(c.NOME + ' já está em ' + outra.nome + '.', 'aviso', 5000);
-                        return;
-                    }
-                    PedidoState.extras.push({
-                        nome: c.NOME, funcao: c.FUNCAO || '', origem: 'LARSIL',
-                        refeicoes: PedidoState.frente.separado
-                            ? [refeicaoSelecionada()] : PedidoState.refeicoes.slice(),
-                    });
-                    renderExtras();
-                    fecharBuscaLarsil();
-                    renderCabecalhoFrente();
-                    SESSION.toast(c.NOME + ' somado ao pedido.', 'ok');
-                };
+
+                if (!bloqueio) {
+                    // Reusa o visto que o picker ja tinha: a classe
+                    // .marcada no botao e quem liga e desliga a opacidade.
+                    const marca = document.createElement('span');
+                    marca.className = 'picker-opcao-check';
+                    marca.textContent = '✓';
+                    b.appendChild(marca);
+
+                    b.onclick = () => {
+                        if (selecaoLarsil.has(nome)) selecaoLarsil.delete(nome);
+                        else selecaoLarsil.add(nome);
+                        b.classList.toggle('marcada', selecaoLarsil.has(nome));
+                        atualizarRodapeLarsil();
+                    };
+                }
+
                 lista.appendChild(b);
             });
+
+            atualizarRodapeLarsil();
+        }
+
+        function atualizarRodapeLarsil() {
+            const rodape = document.getElementById('rodapeLarsil');
+            const btn = document.getElementById('btnSomarLarsil');
+            if (!rodape || !btn) return;
+            const n = selecaoLarsil.size;
+            rodape.classList.toggle('hidden', n === 0);
+            btn.textContent = n === 1 ? 'Somar 1 pessoa' : `Somar ${n} pessoas`;
+        }
+
+        /** Fecha o popup somando todos os marcados de uma vez. */
+        function somarSelecionadosLarsil() {
+            if (selecaoLarsil.size === 0) return;
+
+            const porNome = new Map((listaLarsilCache || []).map(c => [c.NOME, c]));
+            let somados = 0;
+
+            selecaoLarsil.forEach(nome => {
+                // Confere de novo na hora de somar: entre marcar e confirmar,
+                // a pessoa pode ter entrado por outro caminho.
+                if (impedimentoLarsil(nome)) return;
+                const c = porNome.get(nome) || { NOME: nome };
+                PedidoState.extras.push({
+                    nome: nome, funcao: c.FUNCAO || '', origem: 'LARSIL',
+                    refeicoes: PedidoState.frente.separado
+                        ? [refeicaoSelecionada()] : PedidoState.refeicoes.slice(),
+                });
+                somados++;
+            });
+
+            selecaoLarsil.clear();
+            renderExtras();
+            fecharBuscaLarsil();
+            renderCabecalhoFrente();
+            atualizarRotuloTodos();
+            renderAbasRefeicao();
+
+            if (somados) {
+                SESSION.toast(somados === 1
+                    ? 'Pessoa somada ao pedido.'
+                    : somados + ' pessoas somadas ao pedido.', 'ok');
+            }
+        }
+
+        /** Mantida para o campo de busca: agora filtra o que já está em mãos. */
+        async function buscarLarsil(termo) {
+            if (!listaLarsilCache) {
+                await carregarLarsil();
+                if (!listaLarsilCache) return;
+            }
+            renderListaLarsil(termo);
         }
 
         // ------------------------------------------------------- etapa 5: resumo
@@ -9399,19 +9557,35 @@ var templateParams = {
                     selecoesColaboradores.push(checkbox.dataset.nome);
                 });
                 
-                // Limpar apenas dados em memória (não o cache)
-                console.log('🧹 Limpando dados em memória...');
-                window.dadosFornecedores = [];
-                window.dadosOrganograma = [];
-                window.dadosColaboradores = [];
-                window.dadosPagcorp = [];
-                
-                // Buscar todos os dados atualizados das APIs
+                // Guarda o que está valendo ANTES de buscar. Limpar primeiro
+                // deixava a pessoa sem colaborador nenhum quando a rede
+                // falhava — e em campo ela falha. Era isto o "meus
+                // colaboradores somem e não consigo selecionar".
+                const anterior = {
+                    fornecedores: window.dadosFornecedores,
+                    organograma: window.dadosOrganograma,
+                    colaboradores: window.dadosColaboradores,
+                    pagcorp: window.dadosPagcorp,
+                };
+
                 console.log('📡 Buscando dados atualizados...');
-                const sucessoAPI = await buscarDadosPorProjetoEquipe(projeto, equipe);
-                
-                if (!sucessoAPI) {
-                    throw new Error('Falha ao buscar dados das APIs');
+                let sucessoAPI = false;
+                try {
+                    sucessoAPI = await buscarDadosPorProjetoEquipe(projeto, equipe);
+                } catch (e) {
+                    console.warn('Falha ao atualizar:', e);
+                }
+
+                // Deu errado: devolve o que havia. Dado velho na tela é muito
+                // melhor do que tela vazia — com o velho ele ainda pede.
+                if (!sucessoAPI || !(window.dadosColaboradores || []).length) {
+                    window.dadosFornecedores = anterior.fornecedores || [];
+                    window.dadosOrganograma = anterior.organograma || [];
+                    window.dadosColaboradores = anterior.colaboradores || [];
+                    window.dadosPagcorp = anterior.pagcorp || [];
+                    if (!sucessoAPI) {
+                        throw new Error('Falha ao buscar dados das APIs');
+                    }
                 }
                 
                 // Recarregar pendências de temperatura

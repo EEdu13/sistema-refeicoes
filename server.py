@@ -3107,9 +3107,16 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
             # leva alguém de outra frente para a mesma refeição.
             termo = (query_params.get('q', [''])[0] or '').strip()
 
+            # Sem termo, devolve todo mundo em ordem alfabética. São umas 400
+            # pessoas — cabe de sobra numa resposta, e deixa o app filtrar
+            # sem ir ao servidor a cada tecla digitada. Quem não lembra o
+            # nome exato consegue procurar rolando a lista.
             if len(termo) < 2:
-                response = {"error": False, "total": 0, "colaboradores": [],
-                            "message": "Digite ao menos 2 letras"}
+                achados = executar_query("""
+                    SELECT ID, NOME, FUNCAO, EQUIPE, PROJETO, EMPRESA
+                    FROM COLABORADORES
+                    WHERE SITUACAO = '1'
+                    ORDER BY NOME""", [])
             else:
                 achados = executar_query("""
                     SELECT TOP 40 ID, NOME, FUNCAO, EQUIPE, PROJETO, EMPRESA
@@ -3117,11 +3124,11 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     WHERE NOME LIKE %s AND SITUACAO = '1'
                     ORDER BY NOME""", ['%' + termo.upper() + '%'])
 
-                response = {
-                    "error": False,
-                    "total": len(achados or []),
-                    "colaboradores": achados or []
-                }
+            response = {
+                "error": False,
+                "total": len(achados or []),
+                "colaboradores": achados or []
+            }
 
         elif path == '/api/fornecedores-cidade':
             # Sugestão por proximidade: fornecedores cadastrados na MESMA
