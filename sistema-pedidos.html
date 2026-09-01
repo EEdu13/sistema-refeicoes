@@ -1407,6 +1407,50 @@
             },
         };
 
+        // -------------------------------------------------------------- datas
+
+        /**
+         * Hoje em Brasília, no formato AAAA-MM-DD.
+         *
+         * `new Date().toISOString()` devolve UTC, que às 21h aqui já virou o
+         * dia seguinte. Era isso que mandava o pedido das 21h para depois de
+         * amanhã, e fazia o histórico e o calendário marcarem o dia errado à
+         * noite.
+         *
+         * `minutosDeFolga` adianta o relógio de propósito: com 10, as 23:50
+         * já contam como o dia seguinte.
+         */
+        function dataLocal(minutosDeFolga) {
+            const quando = new Date(Date.now() + (minutosDeFolga || 0) * 60000);
+            // en-CA formata como AAAA-MM-DD, que é o que os campos esperam.
+            return new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Sao_Paulo',
+                year: 'numeric', month: '2-digit', day: '2-digit',
+            }).format(quando);
+        }
+
+        /** Soma (ou subtrai) dias de uma data AAAA-MM-DD, sem passar por UTC. */
+        function somarDias(iso, dias) {
+            const [a, m, d] = String(iso).split('-').map(Number);
+            const base = new Date(a, m - 1, d);   // meia-noite local
+            base.setDate(base.getDate() + dias);
+            const dois = n => String(n).padStart(2, '0');
+            return base.getFullYear() + '-' + dois(base.getMonth() + 1)
+                 + '-' + dois(base.getDate());
+        }
+
+        /**
+         * A data que o pedido novo já vem preenchido.
+         *
+         * Quase sempre é para o dia seguinte. A virada acontece às 23:50 e
+         * não à meia-noite: quem está lançando na virada quer o dia que vem,
+         * e dez minutos de folga evitam que ele mande para o dia errado sem
+         * perceber.
+         */
+        function dataPadraoDoPedido() {
+            return somarDias(dataLocal(10), 1);
+        }
+
         // ---------------------------------------------------------- navegação
 
         function doShowNewOrder() {
@@ -1414,9 +1458,7 @@
             DOM.showScreen('order');
 
             // Amanhã por padrão: o pedido quase sempre é para o dia seguinte
-            const amanha = new Date();
-            amanha.setDate(amanha.getDate() + 1);
-            PedidoState.data = amanha.toISOString().split('T')[0];
+            PedidoState.data = dataPadraoDoPedido();
             document.getElementById('pedidoData').value = PedidoState.data;
             renderData();
 
@@ -1882,7 +1924,7 @@
                 return;
             }
 
-            const hoje = new Date().toISOString().split('T')[0];
+            const hoje = dataLocal();
             const escolhida = PedidoState.equipe || SESSION.getEquipe();
 
             // Quem ainda não pediu vem primeiro: é sempre uma dessas que ele
@@ -4104,26 +4146,22 @@
 
         /** Atalhos pra não digitar data toda vez — é a consulta mais comum. */
         function atalhoDataHistorico(qual) {
-            const iso = d => d.toISOString().split('T')[0];
-            const hoje = new Date();
+            const hoje = dataLocal();
 
             let de, ate;
             if (qual === 'hoje') {
                 de = ate = hoje;
             } else if (qual === 'ontem') {
-                const ontem = new Date(hoje);
-                ontem.setDate(ontem.getDate() - 1);
-                de = ate = ontem;
+                de = ate = somarDias(hoje, -1);
             } else if (qual === 'semana') {
-                de = new Date(hoje);
-                de.setDate(de.getDate() - 6);
+                de = somarDias(hoje, -6);
                 ate = hoje;
             } else {
                 return;
             }
 
-            document.getElementById('histDe').value = iso(de);
-            document.getElementById('histAte').value = iso(ate);
+            document.getElementById('histDe').value = de;
+            document.getElementById('histAte').value = ate;
             filtrarHistoricoData();
         }
 
@@ -4528,8 +4566,7 @@
         }
 
         function atalhoDataDeposito(qual, botao) {
-            const iso = d => d.toISOString().split('T')[0];
-            const hoje = new Date();
+            const hoje = dataLocal();
             let de, ate;
 
             // Marca o atalho escolhido — sem isso não dá pra saber qual
@@ -4547,12 +4584,9 @@
             } else if (qual === 'hoje') {
                 de = ate = hoje;
             } else if (qual === 'ontem') {
-                const ontem = new Date(hoje);
-                ontem.setDate(ontem.getDate() - 1);
-                de = ate = ontem;
+                de = ate = somarDias(hoje, -1);
             } else if (qual === 'semana') {
-                de = new Date(hoje);
-                de.setDate(de.getDate() - 6);
+                de = somarDias(hoje, -6);
                 ate = hoje;
             } else {
                 return;
@@ -5570,7 +5604,7 @@
             const porDia = pendenciasPorDia();
             const ano = calMes.getFullYear();
             const mes = calMes.getMonth();
-            const hojeK = new Date().toISOString().split('T')[0];
+            const hojeK = dataLocal();
 
             cal.replaceChildren();
 
