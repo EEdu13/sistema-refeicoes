@@ -784,7 +784,8 @@ def _resgatar_aprovacoes_perdidas():
     linhas = executar_query(f"""
         SELECT ID, LIDER, NOME_LIDER, PROJETO, PAGCORP, DATA_RETIRADA,
                TIPO_REFEICAO, FORNECEDOR, VALOR_PAGO, TOTAL_COLABORADORES,
-               TOTAL_PAGAR, CIDADE_PRESTACAO_DO_SERVICO, OBSERVACOES
+               TOTAL_PAGAR, CIDADE_PRESTACAO_DO_SERVICO, OBSERVACOES,
+               ISNULL(RESPONSAVEL_PELO_CARTAO,'') RESPONSAVEL_PELO_CARTAO
         FROM PEDIDOS
         WHERE APROVADO IS NULL
           -- O tipo vem da marca que o app deixou, e é ela que decide o GRUPO.
@@ -830,8 +831,24 @@ def _resgatar_aprovacoes_perdidas():
         def fmt(v):
             return f'{float(v or 0):.2f}'.replace('.', ',')
 
+        # Quem PEDIU, e nao quem lidera a equipe.
+        #
+        # NOME_LIDER e o lider do organograma: numa equipe liderada pela
+        # Elaine, todo pedido chegava assinado por ela, mesmo tendo sido
+        # feito pelo Marcelo. No reenvio isso e pior que confuso — a
+        # aprovacao vai para o grupo com o nome errado no pedido.
+        #
+        # A ordem: quem estava logado no momento do pedido (guardado antes
+        # da tentativa de envio), depois o dono do cartao usado, e so por
+        # ultimo o lider da equipe.
+        guardado = buscar_solicitante(str(min(ids))) or {}
+        quem_pediu = (str(guardado.get('nome') or '').strip()
+                      or str(base.get('RESPONSAVEL_PELO_CARTAO') or '').strip()
+                      or str(base.get('NOME_LIDER') or '').strip()
+                      or '—')
+
         resumo = {
-            'solicitante': base.get('NOME_LIDER') or '—',
+            'solicitante': quem_pediu,
             'projeto': base.get('PROJETO') or '',
             'equipe': lider,
             'pagcorp': pagcorp,
