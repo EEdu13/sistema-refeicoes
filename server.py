@@ -1823,6 +1823,7 @@ def tem_permissao(usuario, codigo):
 # cada avatar da tela viraria uma consulta ao banco.
 # ==========================================================================
 _cache_fotos = {}          # nome normalizado -> url
+_cache_fotos_extremos = {}  # (primeiro, ultimo) -> [chaves]
 _cache_fotos_quando = 0.0
 _cache_fotos_lock = threading.Lock()
 TTL_FOTOS = 600            # 10 minutos
@@ -1844,7 +1845,7 @@ def foto_nossa(nome):
     Painel PCP tira a foto certa das pessoas. SUPERVISOR_FOTOS vem depois,
     como complemento: cobre alguns supervisores que não estão na primeira.
     """
-    global _cache_fotos, _cache_fotos_quando
+    global _cache_fotos, _cache_fotos_extremos, _cache_fotos_quando
 
     agora = time.time()
     with _cache_fotos_lock:
@@ -1873,12 +1874,45 @@ def foto_nossa(nome):
                 if chave:
                     mapa[chave] = url
 
+        # Índice por primeiro+último nome. A tela de login não sabe o nome
+        # completo: ela adivinha "Helieder Souza" a partir de
+        # "helieder.souza", e a foto está cadastrada como HELIEDER RODRIGUES
+        # DE SOUZA. Sem este índice, só quem tem nome curto via a própria
+        # foto ao digitar o login.
+        extremos = {}
+        for chave in mapa:
+            partes = chave.split()
+            if len(partes) >= 2:
+                extremos.setdefault((partes[0], partes[-1]), []).append(chave)
+
         with _cache_fotos_lock:
             _cache_fotos = mapa
+            _cache_fotos_extremos = extremos
             _cache_fotos_quando = agora
 
     with _cache_fotos_lock:
-        return _cache_fotos.get(_chave_nome(nome))
+        mapa = _cache_fotos
+        extremos = _cache_fotos_extremos
+
+    chave = _chave_nome(nome)
+    if not chave:
+        return None
+
+    url = mapa.get(chave)
+    if url:
+        return url
+
+    # Nome parcial: aceita só quando não há dúvida. Dois "Marcos Silva"
+    # diferentes tem que cair no fallback, porque mostrar a cara errada é
+    # pior do que mostrar as iniciais.
+    partes = chave.split()
+    if len(partes) >= 2:
+        candidatos = extremos.get((partes[0], partes[-1])) or []
+        urls = {mapa[c] for c in candidatos}
+        if len(urls) == 1:
+            return urls.pop()
+
+    return None
 
 
 def registrar_sistema_na_iam():

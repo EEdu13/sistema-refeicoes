@@ -2380,16 +2380,20 @@ input[type="radio"], input[type="checkbox"] { accent-color: var(--lar-green); wi
     border-radius: 12px;
     font-family: inherit;
     cursor: pointer;
-    background: linear-gradient(135deg, #1B5E3C 0%, #133F2C 100%);
-    border: 1px solid rgba(111, 207, 123, .28);
-    opacity: .78;
+    /* Cinza-ardosia, nao verde. O verde passa a significar UMA coisa so:
+       "este cartao esta valendo". Com os dois verdes, o usuario tinha de
+       comparar tamanho e brilho para saber qual estava ativo. */
+    background: linear-gradient(135deg, #2E3A40 0%, #232C31 100%);
+    border: 1px solid rgba(255, 255, 255, .14);
+    opacity: .9;
     transition: opacity var(--t-rapida), border-color var(--t-rapida),
-                transform .12s;
+                background var(--t-rapida), transform .12s;
 }
 .cartao-mini:hover,
 .cartao-mini:focus-visible {
     opacity: 1;
-    border-color: var(--lar-green);
+    border-color: rgba(255, 255, 255, .34);
+    background: linear-gradient(135deg, #384750 0%, #2A343A 100%);
 }
 .cartao-mini:active { transform: scale(.96); }
 
@@ -2397,14 +2401,14 @@ input[type="radio"], input[type="checkbox"] { accent-color: var(--lar-green); wi
     font-size: 13px;
     font-weight: 800;
     letter-spacing: .04em;
-    color: #EAF7EE;
+    color: #E4EAED;
 }
 .cartao-mini-cc {
     font-size: 10px;
     font-weight: 700;
     letter-spacing: .1em;
     text-transform: uppercase;
-    color: rgba(234, 247, 238, .62);
+    color: rgba(228, 234, 237, .58);
 }
 
 .cartao {
