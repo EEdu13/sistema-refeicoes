@@ -116,6 +116,15 @@ body::-webkit-scrollbar-track,
    quebra o position:sticky do cabeçalho e da barra de ação. */
 html, body { max-width: 100%; overflow-x: clip; }
 
+/* Toque repetido em qualquer controle não pode virar zoom.
+   O `user-scalable=no` do viewport resolvia isso, mas o Safari moderno o
+   ignora de propósito (acessibilidade). `manipulation` desliga só o gesto
+   de toque duplo para ampliar — pinçar para dar zoom continua funcionando,
+   e é isso que a pessoa usa quando quer mesmo ampliar. */
+button, .btn, [role="button"], input[type="checkbox"], label.employee-item {
+    touch-action: manipulation;
+}
+
 /* ==========================================================================
    ANIMAÇÕES COMPARTILHADAS
    Um vocabulário pequeno, usado em todo o sistema. Se uma tela precisar de

@@ -464,9 +464,16 @@
                 <div class="form-group">
                     <label id="rotuloAContratar">A contratar</label>
                     <div class="contador-pessoas">
-                        <button type="button" class="contador-btn" onclick="mudarAContratar(-1)">−</button>
-                        <span class="contador-valor" id="valorAContratar">0</span>
-                        <button type="button" class="contador-btn" onclick="mudarAContratar(1)">+</button>
+                        <button type="button" class="contador-btn" onclick="mudarAContratar(-1)"
+                                aria-label="Diminuir">−</button>
+                        <input type="text" class="contador-valor" id="valorAContratar"
+                               inputmode="numeric" pattern="[0-9]*" maxlength="2" value="0"
+                               aria-label="Quantidade a contratar"
+                               onfocus="this.select()"
+                               oninput="digitarAContratar(this.value)"
+                               onblur="pintarAContratar()">
+                        <button type="button" class="contador-btn" onclick="mudarAContratar(1)"
+                                aria-label="Aumentar">+</button>
                     </div>
                     <small class="text-muted">Pessoas ainda não contratadas que vão participar da refeição.</small>
                 </div>
@@ -3192,13 +3199,40 @@
          * mesmo estando embaixo das abas — e quem preenchia refeição por
          * refeição sobrescrevia o mesmo número três vezes.
          */
+        /**
+         * Quantidade digitada à mão.
+         *
+         * Chegar a 30 clicando no + trinta vezes é castigo. O campo aceita o
+         * número direto; os botões continuam para ajuste fino.
+         *
+         * Não repinta enquanto digita: reescrever o campo embaixo do dedo
+         * joga o cursor para o começo e embaralha o que a pessoa está
+         * escrevendo. O acerto final fica para o onblur.
+         */
+        function digitarAContratar(texto) {
+            const so = String(texto || '').replace(/\D/g, '');
+            const n = Math.max(0, Math.min(50, parseInt(so || '0', 10) || 0));
+            const f = PedidoState.frente;
+
+            if (f.separado) {
+                if (!f.aContratarRef) f.aContratarRef = {};
+                f.aContratarRef[refeicaoSelecionada()] = n;
+            } else {
+                PedidoState.aContratar = n;
+            }
+
+            atualizarRotuloTodos();
+            renderAbasRefeicao();
+            renderCabecalhoFrente();
+        }
+
         function pintarAContratar() {
             const f = PedidoState.frente;
             const campo = document.getElementById('valorAContratar');
             if (campo) {
-                campo.textContent = f.separado
+                campo.value = String(f.separado
                     ? vagasDaRefeicao(f, refeicaoSelecionada())
-                    : (f.aContratar || 0);
+                    : (f.aContratar || 0));
             }
 
             const rotulo = document.getElementById('rotuloAContratar');

@@ -2638,15 +2638,42 @@ button.cartao:active { transform: scale(.985); }
     font-weight: 700;
     cursor: pointer;
     transition: background var(--t-rapida);
+    /* Dois toques seguidos no +/- davam zoom na pagina, porque o navegador
+       lia como "toque duplo para ampliar". manipulation desliga esse gesto
+       e mantem a rolagem. user-select impede a selecao azul que aparecia
+       ao repetir o toque. */
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
 .contador-btn:hover { background: rgba(111, 207, 123, .14); }
+.contador-btn:active { background: rgba(111, 207, 123, .22); }
+
+/* Campo digitavel: chegar a 30 no clique e castigo. Continua parecendo o
+   numero grande de antes -- sem moldura de formulario, para os botoes
+   seguirem sendo o caminho obvio de ajuste fino. */
 .contador-valor {
     flex: 1;
+    min-width: 0;
     text-align: center;
+    font-family: inherit;
     font-size: 26px;
     font-weight: 800;
     color: var(--lar-forte);
     font-variant-numeric: tabular-nums;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    padding: 6px 4px;
+    touch-action: manipulation;
+    transition: background var(--t-rapida), border-color var(--t-rapida);
+}
+.contador-valor:hover { border-color: var(--lar-line); }
+.contador-valor:focus {
+    outline: none;
+    background: var(--lar-surface-2);
+    border-color: var(--lar-green);
 }
 
 /* --- Resumo final -------------------------------------------------------- */
