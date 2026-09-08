@@ -3638,6 +3638,7 @@
                 o => String(o.EQUIPE || '').trim() === equipe) || (window.dadosOrganograma || [])[0] || {};
 
             const idsGerados = [];
+            const recusados = [];
             let houveFalha = false;
 
             try {
@@ -3698,59 +3699,72 @@
                             ].filter(Boolean).join(' '),
                         };
 
-                        // Offline: vai para a fila do aparelho e sincroniza depois
+                        // Sem rede declarada: nem tenta, guarda no aparelho.
                         if (!navigator.onLine) {
-                            let fila = [];
-                            try { fila = JSON.parse(localStorage.getItem('databaseQueue') || '[]'); } catch (e) {}
-                            fila.push({
-                                tipo: 'database_save', data: corpo,
-                                timestamp: new Date().toISOString(),
-                                id: Date.now() + '_' + Math.random().toString(36).slice(2),
-                            });
-                            localStorage.setItem('databaseQueue', JSON.stringify(fila));
-                            updateDatabaseQueueCounter();
+                            enfileirarPedido(corpo);
                             pedidoEnviadoOffline = true;
                             continue;
                         }
 
-                        const r = await SESSION.apiFetch('/api/salvar-pedido', {
-                            method: 'POST',
-                            body: JSON.stringify(corpo),
-                        });
-                        const d = await r.json();
+                        try {
+                            const r = await SESSION.apiFetch('/api/salvar-pedido', {
+                                method: 'POST',
+                                body: JSON.stringify(corpo),
+                            });
+                            const d = await r.json();
 
-                        if (d.error) {
-                            console.error('Falha ao salvar', ref.tipo, d.message);
-                            houveFalha = true;
-                        } else if (d.pedido_id) {
-                            idsGerados.push(d.pedido_id);
+                            if (d.error) {
+                                // Recusa do servidor (equipe fora do escopo, dado
+                                // inválido). Repetir não resolve, então isto tem
+                                // de aparecer para a pessoa, não só no console.
+                                console.error('Falha ao salvar', ref.tipo, d.message);
+                                recusados.push(ref.nome + ': ' + (d.message || 'recusado'));
+                                houveFalha = true;
+                            } else if (d.pedido_id) {
+                                idsGerados.push(d.pedido_id);
+                            }
+                        } catch (e) {
+                            // A conexão caiu no meio do envio.
+                            //
+                            // navigator.onLine continua dizendo "online": ele só
+                            // sabe que existe uma rede, não que ela funciona. Sem
+                            // este catch o pedido evaporava — não ficava no banco
+                            // nem no aparelho — e a pessoa ainda mandava a
+                            // mensagem para o restaurante achando que pediu.
+                            console.warn('Sem resposta ao salvar', ref.tipo, e);
+                            enfileirarPedido(corpo);
+                            pedidoEnviadoOffline = true;
                         }
                     }
                 }
 
                 if (loading) loading.style.display = 'none';
 
-                // Offline: nada a aprovar agora
-                if (!navigator.onLine) {
-                    mostrarResultado({
-                        tipo: 'aviso',
-                        titulo: 'Salvo no aparelho',
-                        texto: 'Sem conexão. O pedido vai sozinho assim que o sinal voltar, '
-                             + 'e só então segue para aprovação.',
-                        itens: resumoParaPopup(),
-                        botao: 'Entendi',
-                        aoFechar: doShowMain,
-                    });
-                    return;
-                }
-
+                // Nada chegou ao servidor. Ou está guardado no aparelho para
+                // subir depois, ou foi recusado — e são situações bem
+                // diferentes para quem está esperando comer.
                 if (idsGerados.length === 0) {
-                    mostrarResultado({
-                        tipo: 'erro',
-                        titulo: 'Não deu para enviar',
-                        texto: 'Nenhuma refeição foi registrada. Tente de novo.',
-                        botao: 'Fechar',
-                    });
+                    if (pedidoEnviadoOffline) {
+                        mostrarResultado({
+                            tipo: 'aviso',
+                            titulo: 'Salvo no aparelho',
+                            texto: 'Sem conexão. O pedido vai sozinho assim que o sinal '
+                                 + 'voltar, e só então segue para aprovação. NÃO mande '
+                                 + 'para o restaurante ainda.',
+                            itens: resumoParaPopup(),
+                            botao: 'Entendi',
+                            aoFechar: doShowMain,
+                        });
+                    } else {
+                        mostrarResultado({
+                            tipo: 'erro',
+                            titulo: 'Não deu para enviar',
+                            texto: recusados.length
+                                ? 'O sistema recusou: ' + recusados.join(' · ')
+                                : 'Nenhuma refeição foi registrada. Tente de novo.',
+                            botao: 'Fechar',
+                        });
+                    }
                     return;
                 }
 
@@ -3822,8 +3836,10 @@
                     : 'Pedido registrado. A aprovação será tratada manualmente.';
 
                 mostrarResultado({
-                    tipo: houveFalha ? 'aviso' : 'ok',
-                    titulo: houveFalha ? 'Enviado com pendências' : 'Pedido enviado',
+                    tipo: (houveFalha || pedidoEnviadoOffline) ? 'aviso' : 'ok',
+                    titulo: pedidoEnviadoOffline
+                        ? 'Parte ficou no aparelho'
+                        : (houveFalha ? 'Enviado com pendências' : 'Pedido enviado'),
                     texto: grupos.length > 1
                         ? base + ' Mande o pedido para cada restaurante abaixo.'
                         : base,
@@ -3895,6 +3911,29 @@
                 ['Pessoas', String(PedidoState.pessoas)],
                 ['Total', 'R$ ' + PedidoState.total.toFixed(2)],
             ];
+        }
+
+        /**
+         * Guarda um pedido no aparelho para subir quando a rede voltar.
+         *
+         * Usado nos dois casos em que o servidor não recebeu: sem rede
+         * declarada, e conexão que caiu no meio do envio. O segundo era o
+         * que perdia pedido — ninguém trata o fetch que morre no caminho.
+         */
+        function enfileirarPedido(corpo) {
+            let fila = [];
+            try { fila = JSON.parse(localStorage.getItem('databaseQueue') || '[]'); } catch (e) {}
+            fila.push({
+                tipo: 'database_save', data: corpo,
+                timestamp: new Date().toISOString(),
+                id: Date.now() + '_' + Math.random().toString(36).slice(2),
+            });
+            try { localStorage.setItem('databaseQueue', JSON.stringify(fila)); } catch (e) {
+                console.error('Não consegui guardar o pedido no aparelho:', e);
+                return false;
+            }
+            if (typeof updateDatabaseQueueCounter === 'function') updateDatabaseQueueCounter();
+            return true;
         }
 
         /**
