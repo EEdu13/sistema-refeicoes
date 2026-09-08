@@ -2577,6 +2577,19 @@
             }
         }
 
+        /**
+         * Restaurantes de UMA refeição, tirados do cadastro do projeto.
+         *
+         * Antes cada refeição fazia a sua ida à rede, filtrando por cidade —
+         * três requisições por tela, e uma que demorasse deixava o bloco
+         * preso em "Procurando restaurantes…". A cidade ainda enchia a lista
+         * de rótulos ("Nenhum em bahia", "cadastrados do projeto 708") para,
+         * no fim, mostrar os mesmos restaurantes de sempre.
+         *
+         * Agora sai tudo da lista do projeto que já veio no login: nenhuma
+         * requisição, nenhuma espera, e a cidade vira só a legenda embaixo
+         * do nome — informação, não filtro.
+         */
         async function carregarFornecedoresDaRefeicao(id, tipo) {
             const lista = document.getElementById('forn-' + id);
             if (!lista) return;
@@ -2624,43 +2637,15 @@
             }
 
             lista.replaceChildren();
-            const carregando = document.createElement('p');
-            carregando.className = 'text-muted';
-            carregando.textContent = 'Procurando restaurantes…';
-            lista.appendChild(carregando);
 
-            let dados = { na_cidade: [], outros: [] };
-            let falhou = false;
-            try {
-                const r = await SESSION.apiFetch('/api/fornecedores-cidade?cidade='
-                    + encodeURIComponent(PedidoState.cidade || '')
-                    + '&tipo=' + encodeURIComponent(tipo));
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                dados = await r.json();
-            } catch (e) {
-                falhou = true;
-                console.warn('Falha ao buscar fornecedores:', e);
-            }
+            const alvo = String(tipo || '').trim().toUpperCase();
+            const doProjeto = (window.dadosFornecedores || []).filter(
+                f => f && String(f.TIPO_FORN || '').trim().toUpperCase() === alvo);
 
-            lista.replaceChildren();
-
-            // Antes a falha caía numa lista vazia e muda: parecia que o
-            // restaurante não estava cadastrado, e no Fechamento não há nem o
-            // campo manual como saída — a pessoa travava ali sem entender.
-            if (falhou) {
-                const erro = document.createElement('div');
-                erro.className = 'lar-aviso alerta';
-                erro.textContent = 'Não consegui carregar os restaurantes '
-                    + '(sinal ruim?). Nada foi perdido — tente de novo.';
-                lista.appendChild(erro);
-
-                const tentar = document.createElement('button');
-                tentar.type = 'button';
-                tentar.className = 'btn btn-sm';
-                tentar.textContent = 'Tentar de novo';
-                tentar.onclick = () => carregarFornecedoresDaRefeicao(id, tipo);
-                lista.appendChild(tentar);
-            }
+            // Ordena por nome: a lista é curta e a ordem alfabética é a única
+            // que a pessoa consegue prever.
+            doProjeto.sort((a, b) => String(a.FORNECEDOR || '')
+                .localeCompare(String(b.FORNECEDOR || ''), 'pt-BR'));
 
             function opcao(f) {
                 const b = document.createElement('button');
@@ -2670,10 +2655,12 @@
                 const nome = document.createElement('span');
                 nome.className = 'fornecedor-nome';
                 nome.textContent = f.FORNECEDOR;
-                const cid = document.createElement('small');
-                cid.className = 'fornecedor-cidade';
-                cid.textContent = f.LOCAL || '';
-                nome.appendChild(cid);
+                if (f.LOCAL) {
+                    const cid = document.createElement('small');
+                    cid.className = 'fornecedor-cidade';
+                    cid.textContent = f.LOCAL;
+                    nome.appendChild(cid);
+                }
 
                 const preco = document.createElement('span');
                 preco.className = 'fornecedor-preco';
@@ -2692,54 +2679,43 @@
                 return b;
             }
 
-            // --- 1. Na cidade onde a equipe está ---
-            if (PedidoState.cidade && dados.na_cidade && dados.na_cidade.length) {
+            if (doProjeto.length) {
                 const t = document.createElement('div');
                 t.className = 'sugestao-titulo';
-                t.textContent = '📍 Aqui em ' + PedidoState.cidade;
+                t.textContent = 'Cadastrados do projeto ' + (SESSION.getProjeto() || '');
                 lista.appendChild(t);
-                dados.na_cidade.forEach(f => lista.appendChild(opcao(f)));
+                doProjeto.forEach(f => lista.appendChild(opcao(f)));
             }
 
-            // --- 2. Demais cidades do projeto, agrupadas ---
-            // Uma lista corrida de todos os fornecedores do projeto não diz
-            // nada; separada por cidade, a pessoa reconhece de imediato o que
-            // fica perto do que ela conhece.
-            const porCidade = {};
-            (dados.outros || []).forEach(f => {
-                const c = (f.LOCAL || 'Sem cidade').trim();
-                (porCidade[c] = porCidade[c] || []).push(f);
-            });
+            // Cadastro do projeto não carregou: sem isto a lista fica vazia e
+            // muda, indistinguível de "não há restaurante cadastrado".
+            if (!doProjeto.length && !(window.dadosFornecedores || []).length) {
+                const erro = document.createElement('div');
+                erro.className = 'lar-aviso alerta';
+                erro.textContent = 'A lista de restaurantes não carregou.';
+                lista.appendChild(erro);
 
-            const cidades = Object.keys(porCidade).sort();
-            if (cidades.length) {
-                const t = document.createElement('div');
-                t.className = 'sugestao-titulo outros';
-                t.textContent = (PedidoState.cidade && dados.na_cidade && dados.na_cidade.length)
-                    ? 'Cadastrados do projeto ' + SESSION.getProjeto()
-                    : 'Nenhum em ' + (PedidoState.cidade || 'sua cidade')
-                      + ' — cadastrados do projeto ' + SESSION.getProjeto();
-                lista.appendChild(t);
-
-                cidades.forEach(cidade => {
-                    // Cabeçalho leve + restaurantes à vista. A cidade situa,
-                    // mas quem decide é o nome do restaurante e o preço.
-                    const cab = document.createElement('div');
-                    cab.className = 'cidade-cabecalho';
-
-                    const nomeCidade = document.createElement('span');
-                    nomeCidade.textContent = cidade;
-                    const qtd = document.createElement('span');
-                    qtd.className = 'cidade-qtd';
-                    qtd.textContent = porCidade[cidade].length;
-                    cab.append(nomeCidade, qtd);
-                    lista.appendChild(cab);
-
-                    porCidade[cidade].forEach(f => lista.appendChild(opcao(f)));
-                });
+                const tentar = document.createElement('button');
+                tentar.type = 'button';
+                tentar.className = 'btn btn-sm';
+                tentar.textContent = 'Tentar de novo';
+                tentar.onclick = async () => {
+                    tentar.disabled = true;
+                    tentar.textContent = 'Buscando…';
+                    try {
+                        const r = await SESSION.apiFetch('/api/fornecedores?projeto='
+                            + encodeURIComponent(SESSION.getProjeto() || ''));
+                        const d = await r.json();
+                        if (!d.error) window.dadosFornecedores = d.fornecedores || [];
+                    } catch (e) {
+                        console.warn('Falha ao rebuscar fornecedores:', e);
+                    }
+                    carregarFornecedoresDaRefeicao(id, tipo);
+                };
+                lista.appendChild(tentar);
             }
 
-            // --- 3. Fora da lista: nome e valor na mão -------------------
+            // --- Fora da lista: nome e valor na mão -------------------
             // Só existe no PAGCORP. No Fechamento a pessoa precisa escolher
             // um restaurante já cadastrado — foi pedido explicitamente assim,
             // pra não virar um valor combinado de última hora no fechamento.
@@ -2785,7 +2761,7 @@
                 linha.append(nomeManual, valorManual);
                 outro.appendChild(linha);
                 lista.appendChild(outro);
-            } else if (!(dados.na_cidade && dados.na_cidade.length) && !(dados.outros && dados.outros.length)) {
+            } else if (!doProjeto.length && (window.dadosFornecedores || []).length) {
                 const vazio = document.createElement('p');
                 vazio.className = 'text-muted';
                 vazio.style.padding = '12px 4px';
