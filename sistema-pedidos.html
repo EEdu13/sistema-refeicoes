@@ -1464,6 +1464,11 @@
             PedidoState.zerar();
             DOM.showScreen('order');
 
+            // Momento mais importante para os dados estarem certos: é agora
+            // que ele vai marcar quem come. Roda por baixo dos panos, então
+            // não atrasa a abertura da tela.
+            garantirDadosFrescos();
+
             // Amanhã por padrão: o pedido quase sempre é para o dia seguinte
             PedidoState.data = dataPadraoDoPedido();
             document.getElementById('pedidoData').value = PedidoState.data;
@@ -5062,11 +5067,141 @@
             return true;
         }
 
+        // ==========================================================
+        // ESTAR SEMPRE ATUALIZADO
+        //
+        // Duas coisas envelhecem sem avisar: os DADOS (equipe trocou de
+        // gente, fornecedor novo) e a VERSÃO do app, que num PWA instalado
+        // pode ficar meses presa em cache porque ninguém fecha o aplicativo.
+        //
+        // Recarregar no meio de um pedido perde o pedido, então a regra é:
+        // descobrir a qualquer momento, aplicar só quando ele está parado na
+        // tela inicial ou pediu explicitamente.
+        // ==========================================================
+
+        let versaoNovaEsperando = false;
+        let dadosAtualizadosEm = 0;        // Date.now() da última carga boa
+        let buscandoDadosEmSilencio = false;
+        const IDADE_MAXIMA_DADOS = 5 * 60 * 1000;   // 5 min
+
+        /** Pergunta ao service worker se há versão nova publicada. */
+        async function procurarVersaoNova() {
+            if (!('serviceWorker' in navigator)) return false;
+            try {
+                const reg = await navigator.serviceWorker.getRegistration();
+                if (!reg) return false;
+                await reg.update();
+
+                if (reg.waiting) { versaoNovaEsperando = true; return true; }
+
+                // update() volta assim que baixa, mas a versão nova ainda
+                // precisa instalar antes de virar 'waiting'. Sem esperar por
+                // isso, o botão responderia "já está atualizado" justamente
+                // para quem acabou de tocar nele.
+                const instalando = reg.installing;
+                if (instalando) {
+                    await new Promise(pronto => {
+                        const encerrar = () => {
+                            instalando.removeEventListener('statechange', ver);
+                            pronto();
+                        };
+                        const ver = () => {
+                            if (instalando.state === 'installed'
+                                || instalando.state === 'activated'
+                                || instalando.state === 'redundant') encerrar();
+                        };
+                        instalando.addEventListener('statechange', ver);
+                        ver();
+                        setTimeout(encerrar, 8000);   // não trava a tela
+                    });
+                }
+
+                versaoNovaEsperando = !!reg.waiting;
+                return versaoNovaEsperando;
+            } catch (e) {
+                console.warn('Não consegui checar a versão:', e);
+                return false;
+            }
+        }
+
+        /** Troca para a versão nova e recarrega. */
+        async function aplicarVersaoNova() {
+            if (!('serviceWorker' in navigator)) { location.reload(); return; }
+
+            let reg = null;
+            try { reg = await navigator.serviceWorker.getRegistration(); } catch (e) { /* noop */ }
+            if (!reg || !reg.waiting) { location.reload(); return; }
+
+            // Recarregar antes do service worker novo assumir traria a versão
+            // velha do cache de novo. Por isso espera o controllerchange, com
+            // um limite de segurança caso ele não venha.
+            let recarregou = false;
+            const recarregar = () => {
+                if (recarregou) return;
+                recarregou = true;
+                location.reload();
+            };
+            navigator.serviceWorker.addEventListener('controllerchange', recarregar);
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            setTimeout(recarregar, 3000);
+        }
+
+        /**
+         * Recarrega os dados por baixo dos panos.
+         *
+         * Sem popup e sem travar a tela: é o que faz a troca de gente na
+         * equipe aparecer sem ninguém tocar em "Atualizar Dados". Se falhar,
+         * fica quieto — os dados que já estavam continuam valendo.
+         */
+        async function atualizarDadosEmSilencio() {
+            if (buscandoDadosEmSilencio || !navigator.onLine) return;
+            buscandoDadosEmSilencio = true;
+            try {
+                const equipe = SESSION.getEquipe();
+                const projeto = SESSION.getProjeto();
+                if (!equipe || !projeto) return;
+
+                const antes = (window.dadosColaboradores || []).length;
+                const ok = await buscarDadosPorProjetoEquipe(projeto, equipe);
+                if (ok && (window.dadosColaboradores || []).length) {
+                    dadosAtualizadosEm = Date.now();
+                    const depois = window.dadosColaboradores.length;
+                    if (depois !== antes) {
+                        console.log(`👥 Equipe mudou: ${antes} → ${depois} colaboradores`);
+                        if (typeof renderPessoas === 'function'
+                            && document.getElementById('listaColaboradores')) {
+                            renderPessoas();
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Atualização silenciosa falhou:', e);
+            } finally {
+                buscandoDadosEmSilencio = false;
+            }
+        }
+
+        /** Dados velhos? Busca de novo. Chamado ao entrar nas telas. */
+        function garantirDadosFrescos() {
+            if (Date.now() - dadosAtualizadosEm > IDADE_MAXIMA_DADOS) {
+                atualizarDadosEmSilencio();
+            }
+        }
+
         function doShowMain() {
             DOM.showScreen('main');
             loadPendingTemperatures();
             resetOrder();
             renderAvisoEnvios();
+
+            // Aqui ele está parado, sem pedido aberto: é a hora segura de
+            // trocar de versão. Mid-pedido isso jogaria o trabalho fora.
+            garantirDadosFrescos();
+            procurarVersaoNova().then(tem => {
+                if (!tem) return;
+                SESSION.toast('Atualizando o aplicativo…', 'info', 2500);
+                setTimeout(aplicarVersaoNova, 900);
+            });
         }
 
         function toggleMealSelection(mealType) {
@@ -9332,6 +9467,9 @@ var templateParams = {
                 window.dadosFornecedores = fornecedores;
                 window.dadosColaboradores = colaboradores;
                 window.dadosOrganograma = organograma;
+                // Marca a hora da carga boa: é o que diz se os dados na tela
+                // já envelheceram na próxima vez que ele abrir um pedido.
+                dadosAtualizadosEm = Date.now();
 
                 console.log(`✅ Dados salvos no cache:`, {
                     fornecedores: fornecedores.length,
@@ -9693,16 +9831,30 @@ var templateParams = {
                 // Mostrar resultado
                 console.log('✅ Todos os dados atualizados');
                 
+                dadosAtualizadosEm = Date.now();
+
+                // Dado novo com app velho ainda deixa a pessoa com problema
+                // resolvido pela metade — o botão precisa cobrir os dois.
+                const temVersaoNova = await procurarVersaoNova();
+
                 mostrarResultado({
                     tipo: 'ok',
-                    titulo: 'Dados atualizados',
-                    texto: 'Tudo em dia com o servidor.',
+                    titulo: temVersaoNova ? 'Tem versão nova' : 'Dados atualizados',
+                    texto: temVersaoNova
+                        ? 'Os dados já estão em dia. Há também uma versão nova do '
+                          + 'aplicativo — toque abaixo para instalar.'
+                        : 'Tudo em dia com o servidor, e o aplicativo já está na '
+                          + 'versão mais nova.',
                     itens: [
                         ['Fornecedores', String((window.dadosFornecedores || []).length)],
                         ['Colaboradores', String((window.dadosColaboradores || []).length)],
                         ['PAGCORP', String((window.dadosPagcorp || []).length)],
                         ['Pendências', String((pendingTemperatures || []).length)],
                     ],
+                    acoes: temVersaoNova ? [{
+                        rotulo: 'Atualizar o aplicativo',
+                        aoClicar: aplicarVersaoNova,
+                    }] : [],
                     botao: 'Fechar',
                 });
                 

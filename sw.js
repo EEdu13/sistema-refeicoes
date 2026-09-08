@@ -33,7 +33,7 @@ if (ENDERECO_APOSENTADO) {
 // 🎯 CACHE PARA PERSISTÊNCIA DE LOGIN iOS PWA
 let loginDataCache = null;
 
-const CACHE_NAME = 'refeicoes-pwa-v8'; // 🌲 v5.1.0 — mudança de endereço + migração da fila
+const CACHE_NAME = 'refeicoes-pwa-v9'; // 🌲 v5.2.0 — troca de versão a pedido do app
 const urlsToCache = [
     '/login.html',
     '/escolher-equipe.html',
@@ -449,6 +449,15 @@ self.addEventListener('message', event => {
         console.log('🚀 Background sync forçado pelo app');
         processDatabaseQueueBackground();
         processTemperaturaQueueBackground();
+    } else if (event.data.type === 'SKIP_WAITING') {
+        // O app pediu para trocar de versao agora.
+        //
+        // O skipWaiting automatico foi tirado daqui de proposito, para nao
+        // recarregar a tela no meio de um pedido. Entao quem decide a hora e
+        // o app: ele so manda esta mensagem quando a pessoa esta parada na
+        // tela inicial ou tocou em "Atualizar Dados".
+        console.log('⬆️ Assumindo a versao nova a pedido do app');
+        self.skipWaiting();
     } else if (event.data.type === 'KEEP_ALIVE') {
         // Manter Service Worker ativo
         console.log('💓 Service Worker mantido vivo:', new Date().toLocaleTimeString());
