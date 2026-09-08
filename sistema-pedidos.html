@@ -8974,6 +8974,12 @@ var templateParams = {
                     // Voltou ao primeiro plano: é o momento mais provável de
                     // a permissão ter mudado enquanto o app estava parado.
                     revalidarPermissoes(true);
+
+                    // E dos dados também. O app instalado quase nunca é
+                    // fechado: quem deixa aberto de um dia para o outro
+                    // continua com a equipe de ontem na memória, porque a
+                    // página não recarrega ao voltar do segundo plano.
+                    garantirDadosFrescos();
                 }
             });
             

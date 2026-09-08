@@ -2433,6 +2433,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
             self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Equipe')
+            self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
             self.send_header('Content-Length', str(len(corpo)))
             self.end_headers()
             self.wfile.write(corpo)
@@ -2615,6 +2616,12 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Equipe')
+        # Resposta de API nunca pode ser guardada: quem entra e sai da equipe
+        # muda todo dia, e uma lista de ontem servida do cache do navegador é
+        # indistinguível de uma lista certa. Sem este cabeçalho o navegador
+        # decide sozinho, por heurística.
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
+        self.send_header('Pragma', 'no-cache')
         self.end_headers()
 
         # APIs simuladas
