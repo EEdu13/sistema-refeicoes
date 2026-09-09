@@ -9422,6 +9422,56 @@ var templateParams = {
             }
         }
 
+        /**
+         * Cartões PAGCORP de quem está pedindo — não só do líder da equipe.
+         *
+         * Antes a busca usava só o líder da equipe no organograma
+         * (dadosOrganograma[0].LIDER): um supervisor que responde por
+         * cartões em projetos diferentes só via o próprio cartão quando o
+         * organograma da equipe ativa batia o nome dele — trocar de
+         * projeto fazia o cartão sumir, mesmo sendo da mesma pessoa. Um
+         * cartão é da PESSOA, não do projeto: ela pode usar em qualquer um.
+         *
+         * Busca por dois nomes — quem está logado e o líder da equipe — e
+         * junta os dois resultados sem repetir conta. Nunca tira cartão
+         * que já aparecia, só soma o que faltava.
+         */
+        async function buscarCartoesPagcorp(nomeLiderEquipe) {
+            const usuario = SESSION.getUsuario() || {};
+            const candidatos = [usuario.nome, nomeLiderEquipe]
+                .map(n => (n || '').trim())
+                .filter(Boolean);
+
+            // Sem repetir a mesma busca quando a pessoa logada já É o líder
+            const vistos = new Set();
+            const nomes = candidatos.filter(n => {
+                const chave = n.toUpperCase();
+                if (vistos.has(chave)) return false;
+                vistos.add(chave);
+                return true;
+            });
+
+            if (nomes.length === 0) return [];
+
+            const respostas = await Promise.all(nomes.map(async nome => {
+                try {
+                    const r = await SESSION.apiFetch(`/api/pagcorp?lider=${encodeURIComponent(nome)}`);
+                    if (!r.ok) return [];
+                    const d = await r.json();
+                    return d.error ? [] : (d.pagcorp || []);
+                } catch (e) {
+                    console.warn(`❌ Erro ao buscar PAGCORP de "${nome}":`, e);
+                    return [];
+                }
+            }));
+
+            const porConta = new Map();
+            respostas.flat().forEach(c => {
+                if (c && c.CONTA) porConta.set(String(c.CONTA), c);
+            });
+            return Array.from(porConta.values());
+        }
+
         // Função para buscar dados reais das APIs do Azure SQL
         async function buscarDadosPorProjetoEquipe(projeto, equipe) {
             // 🛡️ PROTEÇÃO CONTRA REQUISIÇÕES REPETIDAS
@@ -9489,37 +9539,21 @@ var templateParams = {
                     window.dadosOrganograma.forEach((org, index) => {
                         console.log(`   ${index}: EQUIPE=${org.EQUIPE}, COORDENADOR=${org.COORDENADOR}, SUPERVISOR=${org.SUPERVISOR}, LIDER=${org.LIDER}`);
                     });
-                    
-                    // 🚀 BUSCAR PAGCORP DO LÍDER JÁ NO LOGIN
-                    const lider = window.dadosOrganograma[0]?.LIDER;
-                    if (lider) {
-                        console.log(`🔍 Buscando PAGCORP para líder "${lider}" no login...`);
-                        try {
-                            const pagcorpResponse = await SESSION.apiFetch(`/api/pagcorp?lider=${encodeURIComponent(lider)}`);
-                            if (pagcorpResponse.ok) {
-                                const pagcorpData = await pagcorpResponse.json();
-                                if (!pagcorpData.error) {
-                                    window.dadosPagcorp = pagcorpData.pagcorp || [];
-                                    console.log(`✅ PAGCORP carregado no login: ${window.dadosPagcorp.length} registros`);
-                                } else {
-                                    window.dadosPagcorp = [];
-                                    console.log('❌ Erro ao buscar PAGCORP no login:', pagcorpData.message);
-                                }
-                            } else {
-                                window.dadosPagcorp = [];
-                                console.log('❌ Erro na API do PAGCORP no login');
-                            }
-                        } catch (e) {
-                            window.dadosPagcorp = [];
-                            console.warn('❌ Erro ao buscar PAGCORP no login:', e);
-                        }
-                    } else {
-                        window.dadosPagcorp = [];
-                        console.log('❌ Nenhum líder encontrado no organograma para buscar PAGCORP');
-                    }
                 } else {
-                    window.dadosPagcorp = [];
                     console.log(`⚠️ Nenhum dado de organograma encontrado para projeto=${projeto}, equipe=${equipe}`);
+                }
+
+                // Cartão é da PESSOA, não do projeto — busca pelo nome de
+                // quem está logado e pelo líder da equipe, e junta os dois
+                // sem repetir conta. Ver buscarCartoesPagcorp() acima. Sem
+                // organograma nenhum, ainda assim busca pelo nome de quem
+                // está logado — antes isso zerava o cartão junto.
+                try {
+                    window.dadosPagcorp = await buscarCartoesPagcorp(window.dadosOrganograma[0]?.LIDER);
+                    console.log(`✅ PAGCORP carregado: ${window.dadosPagcorp.length} registro(s)`);
+                } catch (e) {
+                    window.dadosPagcorp = [];
+                    console.warn('❌ Erro ao buscar PAGCORP:', e);
                 }
                 
                 // Salvar cache offline (INCLUINDO organograma e PAGCORP)
