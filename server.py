@@ -4617,9 +4617,62 @@ def main():
         # IPv4. Medido: 2,05s por localhost contra 0,005s por 127.0.0.1 —
         # 400x. Com dezenas de requisições por tela, era isso que fazia
         # "enviar pedido" levar meio minuto.
-        class ServidorDualStack(socketserver.ThreadingTCPServer):
+        class _LimiteThreadsMixin:
+            """LIMITE DURO DE THREADS SIMULTÂNEAS.
+
+            Sem isto, cada conexão TCP vira uma thread do SO sem limite
+            nenhum. Se o banco fica lento (a espera por conexão no pool
+            chega a 20s, e uma query pode levar até 30s antes de desistir),
+            cada requisição prende a sua thread por até ~100s no pior caso.
+            Basta um pico de acessos — várias pessoas voltando pro app ao
+            mesmo tempo, por exemplo — durante uma lentidão do banco para
+            as threads se acumularem até estourar o limite do processo.
+            Foi exatamente isso que derrubou a produção em 09/09:
+            "RuntimeError: can't start new thread", e depois disso o
+            processo não conseguia nem responder ao /health — o Railway
+            via "Application failed to respond".
+
+            Acima do limite, a conexão nova espera na fila do sistema
+            operacional em vez de criar mais uma thread: o processo nunca
+            fica sem thread disponível pra aceitar a próxima. 120 é folga
+            generosa acima do tráfego real (dezenas de pessoas, não
+            milhares) e folga generosa abaixo de qualquer limite de thread
+            de container.
+            """
+            # Fila de conexões aceitas pelo SO antes de virar thread — o
+            # padrão do socketserver é 5, baixo demais para absorver um
+            # pico curto sem começar a recusar conexão.
+            request_queue_size = 128
+
+            MAX_THREADS_SIMULTANEAS = 120
+            _semaforo_threads = threading.BoundedSemaphore(MAX_THREADS_SIMULTANEAS)
+
+            def process_request(self, request, client_address):
+                self._semaforo_threads.acquire()
+                try:
+                    super().process_request(request, client_address)
+                except Exception:
+                    # A thread não chegou a nascer (ou algo raro deu errado
+                    # antes disso) — sem isto o semáforo vazaria uma vaga
+                    # a cada erro e o limite encolheria sozinho com o tempo.
+                    self._semaforo_threads.release()
+                    raise
+
+            def process_request_thread(self, request, client_address):
+                # Aqui sim a requisição terminou de verdade — é a hora
+                # certa de devolver a vaga.
+                try:
+                    super().process_request_thread(request, client_address)
+                finally:
+                    self._semaforo_threads.release()
+
+        class ServidorDualStack(_LimiteThreadsMixin, socketserver.ThreadingTCPServer):
             address_family = socket.AF_INET6
             daemon_threads = True          # não segura o desligamento
+            allow_reuse_address = True
+
+        class ServidorIPv4(_LimiteThreadsMixin, socketserver.ThreadingTCPServer):
+            daemon_threads = True
             allow_reuse_address = True
 
         try:
@@ -4633,8 +4686,9 @@ def main():
             servidor.server_activate()
             familia = "IPv6+IPv4"
         except OSError:
-            # Ambiente sem IPv6: segue só com IPv4, como antes
-            servidor = socketserver.ThreadingTCPServer(("", port), RefeicaoHandler)
+            # Ambiente sem IPv6: segue só com IPv4, como antes — mas com o
+            # mesmo limite de threads, que também vale aqui.
+            servidor = ServidorIPv4(("", port), RefeicaoHandler)
             familia = "IPv4"
 
         with servidor as httpd:
