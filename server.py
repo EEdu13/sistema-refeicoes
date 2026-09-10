@@ -540,6 +540,7 @@ def telegram_pedir_aprovacao(resumo, ids, fluxo=FLUXO_PAGCORP):
     # aprovação de venda costuma fazer.
     ok, detalhe = telegram_enviar(chat, '\n'.join(linhas), botoes=[
         [('✅ APROVAR', f'aprovar:{referencia}')],
+        [('✏️ EDITAR VALOR', f'editar:{referencia}')],
         [('❌ REPROVAR', f'reprovar:{referencia}')],
     ])
 
@@ -563,6 +564,358 @@ def _tg_texto_decidido(msg, carimbo):
     bruto = msg.get('text') or ''
     seguro = (bruto.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
     return f'<s>{seguro}</s>\n\n{carimbo}'
+
+
+# ==========================================================================
+# EDIÇÃO DE VALOR PELA APROVADORA
+#
+# "Pediram café a R$ 25, só autorizo R$ 12" — sem edição, a única saída era
+# reprovar tudo e pedir pra refazer. Agora ela responde a um prompt do bot
+# com o valor novo; o lote é aprovado com esse valor, o resto do pedido
+# (o que ela não mencionou) aprova pelo valor pedido mesmo.
+#
+# Telegram não tem campo de texto num botão — o padrão pra isso é
+# force_reply: o bot manda uma mensagem pedindo resposta, e o que ela
+# responder chega com reply_to_message apontando pra essa mensagem. Por
+# isso o rastreamento é por message_id do PROMPT, não do pedido: é esse id
+# que volta na resposta.
+# ==========================================================================
+ARQUIVO_EDICOES = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), '_edicoes_pendentes.json')
+_lock_edicoes = threading.Lock()
+
+
+def _ler_edicoes():
+    try:
+        with open(ARQUIVO_EDICOES, encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def registrar_edicao(message_id_prompt, dados):
+    with _lock_edicoes:
+        mapa = _ler_edicoes()
+        mapa[str(message_id_prompt)] = dados
+        if len(mapa) > 200:
+            for k in list(mapa)[:-200]:
+                mapa.pop(k, None)
+        try:
+            with open(ARQUIVO_EDICOES, 'w', encoding='utf-8') as f:
+                json.dump(mapa, f, ensure_ascii=False)
+        except Exception as e:
+            print(f'⚠️ Não consegui registrar a edição pendente: {e}', flush=True)
+
+
+def buscar_edicao(message_id_prompt):
+    with _lock_edicoes:
+        return _ler_edicoes().get(str(message_id_prompt))
+
+
+def remover_edicao(message_id_prompt):
+    with _lock_edicoes:
+        mapa = _ler_edicoes()
+        if mapa.pop(str(message_id_prompt), None) is not None:
+            try:
+                with open(ARQUIVO_EDICOES, 'w', encoding='utf-8') as f:
+                    json.dump(mapa, f, ensure_ascii=False)
+            except Exception as e:
+                print(f'⚠️ Não consegui remover a edição pendente: {e}', flush=True)
+
+
+def _ids_do_lote(referencia, b):
+    """IDs em AGUARDANDO que pertencem ao MESMO lote da referência, com uma
+    descrição pra log. APROVAR, REPROVAR e EDITAR VALOR precisam do mesmo
+    alvo — ficou uma função só, em vez de cada botão repetir a busca.
+
+    Dois caminhos: os ids exatos ficaram guardados no envio
+    (registrar_solicitante); sem esse registro (ele vive em disco, e o
+    Railway zera o disco a cada deploy), agrupa pelo HORÁRIO do lote — um
+    lote é gravado em poucos segundos, e levas diferentes da mesma equipe
+    ficam separadas por muitos minutos.
+    """
+    solicitante = buscar_solicitante(referencia) or {}
+    ids_desta = [int(i) for i in (solicitante.get('pedidos') or []) if str(i).isdigit()]
+    if ids_desta:
+        return ids_desta, f'{len(ids_desta)} pedido(s) desta mensagem'
+
+    pendentes = executar_query(
+        "SELECT ID FROM PEDIDOS WHERE LIDER = %s "
+        "AND CAST(DATA_RETIRADA AS DATE) = CAST(%s AS DATE) "
+        "AND ABS(DATEDIFF(second, Criado, %s)) <= 120 "
+        "AND APROVADO = 'AGUARDANDO'",
+        [b['LIDER'], b['DATA_RETIRADA'], b['Criado']]) or []
+    ids = [int(p['ID']) for p in pendentes]
+    return ids, f'lote da equipe {b["LIDER"]} em {b["DATA_RETIRADA"]} (por horário)'
+
+
+def _itens_do_lote(ids):
+    """Linhas do banco para os ids de um lote — fonte única pro
+    detalhamento no WhatsApp, pro prompt de edição e pra própria edição."""
+    if not ids:
+        return []
+    marcadores = ', '.join(['%s'] * len(ids))
+    return executar_query(f"""
+        SELECT ID, TIPO_REFEICAO, FORNECEDOR, VALOR_PAGO, VALOR_SOLICITADO,
+               TOTAL_COLABORADORES, TOTAL_PAGAR, PROJETO, LIDER, DATA_RETIRADA
+        FROM PEDIDOS WHERE ID IN ({marcadores}) ORDER BY ID
+    """, ids) or []
+
+
+def _data_br_segura(valor):
+    """DATA_RETIRADA pode chegar como date, datetime ou string — sempre
+    vira dd/mm/aaaa, sem quebrar se o formato for outro."""
+    texto = str(valor).split(' ')[0].split('T')[0]
+    partes = texto.split('-')
+    return '/'.join(reversed(partes)) if len(partes) == 3 else texto
+
+
+def _montar_aviso_whatsapp(ids, decisao, quem_nome, hora=None):
+    """Devolutiva completa pro solicitante — o que foi decidido, item por
+    item, com o valor unitário.
+
+    Antes dizia só "Pedido APROVADO" com a data e a equipe: não dizia O QUE
+    tinha sido aprovado, nem se algum valor tinha sido ajustado pra menos
+    do que o pedido. Quem recebia tinha que abrir o app pra saber.
+    """
+    itens = _itens_do_lote(ids)
+    marca = ('✅ *Pedido APROVADO*' if decisao == 'APROVADO'
+             else '❌ *Pedido REPROVADO*')
+
+    if not itens:
+        # Sem itens pra detalhar (não deveria acontecer): não trava a
+        # devolutiva por isso, cai no formato curto de antes.
+        return f'{marca}\n\n_Resposta de {quem_nome}_'
+
+    b = itens[0]
+    linhas = [marca, '', f"📅 {_data_br_segura(b['DATA_RETIRADA'])}",
+              f"👥 Equipe {b['LIDER']}" + (f" — Projeto {b['PROJETO']}"
+                                          if b.get('PROJETO') else '')]
+
+    linhas += ['', '🍴 *Refeições:*']
+    total = 0.0
+    for it in itens:
+        valor = float(it['VALOR_PAGO'] or 0)
+        solicitado = float(it['VALOR_SOLICITADO'] if it['VALOR_SOLICITADO'] is not None else valor)
+        qtd = int(it['TOTAL_COLABORADORES'] or 0)
+        subtotal = float(it['TOTAL_PAGAR'] if it['TOTAL_PAGAR'] is not None else valor * qtd)
+        total += subtotal
+
+        forn = it.get('FORNECEDOR') or ''
+        linhas.append(f"• {it['TIPO_REFEICAO']}" + (f" — {forn}" if forn else ''))
+        detalhe = (f"  {qtd} × R$ {consulta_fechamento.moeda(valor)} = "
+                   f"R$ {consulta_fechamento.moeda(subtotal)}")
+        # Só mostra "ajustado" quando o pedido foi aprovado com valor
+        # diferente do que foi pedido — reprovado não teve ajuste nenhum.
+        if decisao == 'APROVADO' and abs(solicitado - valor) >= 0.005:
+            detalhe += (f"  ✏️ _ajustado de R$ "
+                       f"{consulta_fechamento.moeda(solicitado)}_")
+        linhas.append(detalhe)
+
+    rotulo_total = 'aprovado' if decisao == 'APROVADO' else 'do pedido'
+    linhas += ['', f"💰 *Total {rotulo_total}:* R$ {consulta_fechamento.moeda(total)}"]
+
+    rodape = f"_Resposta de {quem_nome}"
+    if hora:
+        rodape += f" · {hora}"
+    linhas += ['', rodape + "_"]
+
+    return '\n'.join(linhas)
+
+
+def _montar_prompt_edicao(itens):
+    """Texto que pede o valor novo — mostra o que está no lote agora, pra
+    ela decidir sem precisar abrir o pedido em outro lugar."""
+    linhas = ['✏️ <b>Editar valor</b>', '',
+              'Responda ESTA mensagem com o valor novo — uma refeição por '
+              'linha. O que você não mencionar aprova pelo valor pedido.',
+              '']
+
+    familias = []
+    for it in itens:
+        familia = consulta_fechamento.familia_refeicao(it['TIPO_REFEICAO'])
+        if familia not in familias:
+            familias.append(familia)
+        linhas.append(f"• {it['TIPO_REFEICAO']} — R$ "
+                      f"{consulta_fechamento.moeda(it['VALOR_PAGO'])}")
+
+    linhas.append('')
+    if len(familias) == 1:
+        linhas.append(f"Exemplo: <code>{familias[0]} 12</code> ou só <code>12</code>")
+    else:
+        linhas.append('Exemplo:')
+        linhas.append('\n'.join(f"<code>{f} {v}</code>"
+                                for f, v in zip(familias, (12, 20, 22))))
+
+    return '\n'.join(linhas)
+
+
+def _parse_edicao(texto, itens):
+    """Interpreta a resposta dela. Devolve {família: valor_novo}.
+
+    Uma linha por ajuste, formato 'NOME VALOR' — ou só o número, quando o
+    lote tem uma família só e não há dúvida de qual refeição é. Linha que
+    não bate o formato é ignorada, não trava o resto.
+    """
+    familias_no_lote = list(dict.fromkeys(
+        consulta_fechamento.familia_refeicao(it['TIPO_REFEICAO']) for it in itens))
+
+    ajustes = {}
+    for linha in (texto or '').strip().split('\n'):
+        linha = linha.strip()
+        if not linha:
+            continue
+        m = re.match(r'^(.*?)\s*(?:R\$\s*)?(\d+(?:[.,]\d{1,2})?)\s*$', linha)
+        if not m:
+            continue
+        nome, valor_txt = m.groups()
+        try:
+            valor = float(valor_txt.replace(',', '.'))
+        except ValueError:
+            continue
+        if valor <= 0:
+            continue
+
+        nome = nome.strip(' :-')
+        if nome:
+            familia = consulta_fechamento.familia_refeicao(nome)
+            if familia in familias_no_lote:
+                ajustes[familia] = valor
+        elif len(familias_no_lote) == 1:
+            ajustes[familias_no_lote[0]] = valor
+
+    return ajustes
+
+
+def _aplicar_edicao(ids, ajustes, quem_nome):
+    """Aplica os ajustes de valor e aprova o lote inteiro — o que foi
+    ajustado entra com o valor novo, o resto entra pelo valor pedido.
+
+    VALOR_SOLICITADO só é preenchido se ainda estava vazio: preserva o
+    valor ORIGINAL do pedido mesmo que ela edite de novo depois.
+    TOTAL_PAGAR é recalculado em cima do valor novo — nunca fica
+    desalinhado com VALOR_PAGO × TOTAL_COLABORADORES.
+
+    Devolve (quantos pedidos mudaram, [(refeição, valor_antes, valor_novo)])
+    pra confirmar pra ela e pro WhatsApp do solicitante.
+    """
+    itens = _itens_do_lote(ids)
+    resumo = []
+    afetados = 0
+
+    for it in itens:
+        familia = consulta_fechamento.familia_refeicao(it['TIPO_REFEICAO'])
+        novo_valor = ajustes.get(familia)
+        qtd = int(it['TOTAL_COLABORADORES'] or 0)
+
+        if novo_valor is not None:
+            novo_total = round(novo_valor * qtd, 2)
+            n = executar_query(
+                "UPDATE PEDIDOS SET "
+                "  VALOR_SOLICITADO = ISNULL(VALOR_SOLICITADO, VALOR_PAGO), "
+                "  VALOR_PAGO = %s, TOTAL_PAGAR = %s, "
+                "  APROVADO = 'APROVADO', APROVADO_POR = %s "
+                "WHERE ID = %s AND APROVADO = 'AGUARDANDO'",
+                [novo_valor, novo_total, quem_nome[:100], it['ID']])
+            if n:
+                afetados += n
+                resumo.append((it['TIPO_REFEICAO'], float(it['VALOR_PAGO'] or 0), novo_valor))
+        else:
+            n = executar_query(
+                "UPDATE PEDIDOS SET APROVADO = 'APROVADO', APROVADO_POR = %s "
+                "WHERE ID = %s AND APROVADO = 'AGUARDANDO'",
+                [quem_nome[:100], it['ID']])
+            if n:
+                afetados += n
+
+    return afetados, resumo
+
+
+def _tratar_resposta_edicao(msg, prompt_id):
+    """Resposta dela ao prompt de 'editar valor' — parse, aplica, avisa."""
+    pendente = buscar_edicao(prompt_id)
+    if not pendente:
+        return
+
+    chat = str((msg.get('chat') or {}).get('id') or '')
+    quem = msg.get('from') or {}
+    quem_id = str(quem.get('id') or '')
+    quem_nome = ' '.join(filter(None, [quem.get('first_name'), quem.get('last_name')])) \
+        or quem.get('username') or 'Desconhecido'
+
+    # Mesma autorização do clique nos botões — ver _tg_tratar_callback.
+    autorizados = {str(telegram_chat_do_fluxo(f))
+                   for f in (FLUXO_PAGCORP, FLUXO_FECHAMENTO)} - {'', 'None'}
+    if chat not in autorizados:
+        return
+    if TELEGRAM_APROVADORES and quem_id not in TELEGRAM_APROVADORES:
+        telegram_enviar(chat, 'Você não tem permissão para aprovar.')
+        return
+
+    ids = pendente.get('ids') or []
+    itens = _itens_do_lote(ids)
+    if not itens:
+        telegram_enviar(chat, '⚠️ Não encontrei mais este pedido — pode já '
+                              'ter sido decidido.')
+        remover_edicao(prompt_id)
+        return
+
+    texto = (msg.get('text') or '').strip()
+    ajustes = _parse_edicao(texto, itens)
+    if not ajustes:
+        # Mantém o pedido de edição vivo: ela pode ter digitado errado e
+        # vai tentar de novo respondendo a mesma mensagem.
+        telegram_enviar(chat,
+            '⚠️ Não entendi o valor. Responda esta mesma mensagem de novo, '
+            'assim: <code>CAFÉ 12</code> (uma refeição por linha).')
+        return
+
+    afetados, resumo = _aplicar_edicao(ids, ajustes, quem_nome)
+    remover_edicao(prompt_id)
+
+    if not afetados:
+        telegram_enviar(chat, 'ℹ️ Este pedido já tinha sido decidido antes '
+                              'da sua resposta.')
+        return
+
+    referencia = pendente.get('referencia')
+    chat_original = pendente.get('chat') or chat
+    msg_id_original = pendente.get('message_id_original')
+    hora = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime('%d/%m às %H:%M')
+
+    if msg_id_original:
+        quem_seguro = (quem_nome.replace('&', '&amp;')
+                                .replace('<', '&lt;').replace('>', '&gt;'))
+        marca = '✅ <b>APROVADO (editado)</b>' if resumo else '✅ <b>APROVADO</b>'
+        texto_original = pendente.get('texto_original') or ''
+        seguro = (texto_original.replace('&', '&amp;')
+                                .replace('<', '&lt;').replace('>', '&gt;'))
+        _tg_api('editMessageText', chat_id=chat_original, message_id=msg_id_original,
+                text=f'<s>{seguro}</s>\n\n{marca} por {quem_seguro} · {hora}',
+                parse_mode='HTML')
+
+    if resumo:
+        partes = [f"• {tipo}: R$ {consulta_fechamento.moeda(antes)} → "
+                  f"R$ {consulta_fechamento.moeda(depois)}"
+                  for tipo, antes, depois in resumo]
+        telegram_enviar(chat, '✅ <b>Ajustado e aprovado</b>\n\n' + '\n'.join(partes))
+    else:
+        telegram_enviar(chat, '✅ Aprovado.')
+
+    # Devolutiva ao solicitante em thread — mesma razão de sempre: Z-API às
+    # vezes demora, e isso não pode prender o processamento de mensagens.
+    def _avisar():
+        solicitante = buscar_solicitante(referencia) or {}
+        telefone = _so_digitos(solicitante.get('telefone') or '')
+        if not telefone:
+            print(f'ℹ️ {solicitante.get("login", "solicitante")} sem telefone '
+                  f'na IAM — devolutiva da edição não enviada', flush=True)
+            return
+        aviso = _montar_aviso_whatsapp(ids, 'APROVADO', quem_nome, hora)
+        ok, _ = zapi_enviar_texto(telefone, aviso)
+        print(f'📤 Devolutiva da edição: {"enviada" if ok else "falhou"}', flush=True)
+
+    threading.Thread(target=_avisar, daemon=True).start()
 
 
 def _tg_tratar_callback(cb):
@@ -629,6 +982,52 @@ def _tg_tratar_callback(cb):
                 daemon=True).start()
         return
 
+    # Editar valor: manda um prompt (force_reply) e sai — quem aplica o
+    # ajuste é _tratar_resposta_edicao(), quando a resposta chegar como
+    # mensagem normal. Ver o bloco "EDIÇÃO DE VALOR" acima.
+    if dado.startswith('editar:'):
+        referencia_edicao = dado.partition(':')[2]
+        if not referencia_edicao.isdigit():
+            return
+
+        base_edicao = executar_query(
+            "SELECT LIDER, DATA_RETIRADA, Criado, ISNULL(APROVADO,'') APROVADO "
+            "FROM PEDIDOS WHERE ID = %s", [int(referencia_edicao)])
+        if not base_edicao or base_edicao[0]['APROVADO'] not in ('', 'AGUARDANDO'):
+            _tg_api('answerCallbackQuery', callback_query_id=cb['id'],
+                    text='Este pedido já foi decidido.', show_alert=True)
+            return
+
+        b_edicao = base_edicao[0]
+        ids_edicao, _ = _ids_do_lote(referencia_edicao, b_edicao)
+        itens_edicao = _itens_do_lote(ids_edicao)
+        if not itens_edicao:
+            _tg_api('answerCallbackQuery', callback_query_id=cb['id'],
+                    text='Não achei os itens deste pedido.', show_alert=True)
+            return
+
+        _tg_api('answerCallbackQuery', callback_query_id=cb['id'],
+                text='Responda com o novo valor 👇')
+
+        resposta_prompt = _tg_api(
+            'sendMessage', chat_id=chat, text=_montar_prompt_edicao(itens_edicao),
+            parse_mode='HTML', reply_markup={'force_reply': True, 'selective': True})
+        prompt_id = ((resposta_prompt or {}).get('result') or {}).get('message_id') \
+            if resposta_prompt and resposta_prompt.get('ok') else None
+        if not prompt_id:
+            print('⚠️ Não consegui enviar o prompt de edição', flush=True)
+            return
+
+        msg_original = cb.get('message') or {}
+        registrar_edicao(prompt_id, {
+            'referencia': referencia_edicao,
+            'ids': ids_edicao,
+            'chat': chat,
+            'message_id_original': msg_original.get('message_id'),
+            'texto_original': msg_original.get('text') or '',
+        })
+        return
+
     acao, _, referencia = dado.partition(':')
     decisao = 'APROVADO' if acao == 'aprovar' else 'REPROVADO' if acao == 'reprovar' else None
     if not decisao or not referencia.isdigit():
@@ -667,19 +1066,8 @@ def _tg_tratar_callback(cb):
 
     b = base[0]
 
-    # Decide SÓ os pedidos DESTA mensagem.
-    #
-    # Antes o UPDATE era por LIDER + DATA_RETIRADA, e isso varria todos os
-    # lotes do dia daquela equipe. Uma equipe costuma pedir em levas (o café
-    # e o almoço às 22h, a janta às 23h), e cada leva vira uma mensagem: o
-    # primeiro clique aprovava também o que estava na SEGUNDA mensagem, sem
-    # ninguém ter olhado. Depois, ao clicar nessa segunda, já não havia nada
-    # em AGUARDANDO, o código saía antes e ela ficava sem o risco — foi assim
-    # que o problema apareceu ("a janta não risca").
-    #
-    # Os ids exatos ficaram guardados no envio (registrar_solicitante).
-    solicitante = buscar_solicitante(referencia) or {}
-    ids_desta = [int(i) for i in (solicitante.get('pedidos') or []) if str(i).isdigit()]
+    # Decide SÓ os pedidos DESTA mensagem — ver _ids_do_lote().
+    ids_desta, alcance = _ids_do_lote(referencia, b)
 
     if ids_desta:
         marcadores = ', '.join(['%s'] * len(ids_desta))
@@ -687,20 +1075,8 @@ def _tg_tratar_callback(cb):
             f"UPDATE PEDIDOS SET APROVADO = %s, APROVADO_POR = %s "
             f"WHERE ID IN ({marcadores}) AND APROVADO = 'AGUARDANDO'",
             [decisao, quem_nome[:100]] + ids_desta)
-        alcance = f'{len(ids_desta)} pedido(s) desta mensagem'
     else:
-        # Sem o registro (ele vive em disco, e o Railway zera o disco a cada
-        # deploy): agrupa pelo HORÁRIO do lote. Um lote é gravado em poucos
-        # segundos, e levas diferentes ficam separadas por muitos minutos —
-        # então uma janela curta em volta do pedido de referência isola a
-        # leva certa sem varrer o dia inteiro da equipe.
-        afetados = executar_query(
-            "UPDATE PEDIDOS SET APROVADO = %s, APROVADO_POR = %s WHERE LIDER = %s "
-            "AND CAST(DATA_RETIRADA AS DATE) = CAST(%s AS DATE) "
-            "AND ABS(DATEDIFF(second, Criado, %s)) <= 120 "
-            "AND APROVADO = 'AGUARDANDO'",
-            [decisao, quem_nome[:100], b['LIDER'], b['DATA_RETIRADA'], b['Criado']])
-        alcance = f'lote da equipe {b["LIDER"]} em {b["DATA_RETIRADA"]} (por horário)'
+        afetados = 0
 
     print(f'✅ {decisao} por {quem_nome}: {afetados} de {alcance}', flush=True)
 
@@ -723,25 +1099,27 @@ def _tg_tratar_callback(cb):
     # inteira, e um segundo toque enquanto o primeiro ainda processava
     # ficava girando sem resposta.
     def _finalizar_decisao(chat=chat, msg=msg, decisao=decisao, quem_nome=quem_nome,
-                            referencia=referencia, b=b):
+                            referencia=referencia, b=b, ids_desta=ids_desta):
+        hora = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime('%d/%m às %H:%M')
         if msg.get('message_id'):
             marca = '✅ <b>APROVADO</b>' if decisao == 'APROVADO' else '❌ <b>REPROVADO</b>'
             quem_seguro = (quem_nome.replace('&', '&amp;')
                                     .replace('<', '&lt;').replace('>', '&gt;'))
-            hora = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime('%d/%m às %H:%M')
             _tg_api('editMessageText',
                     chat_id=chat, message_id=msg['message_id'],
                     text=_tg_texto_decidido(msg, f'{marca} por {quem_seguro} · {hora}'),
                     parse_mode='HTML')
 
-        # Devolutiva ao solicitante segue no WhatsApp, que ele já usa
+        # Devolutiva ao solicitante segue no WhatsApp, que ele já usa —
+        # agora com o detalhamento por refeição (ver _montar_aviso_whatsapp).
+        # A mensagem antiga só dizia "aprovado", sem dizer O QUE, nem se
+        # algum valor tinha sido ajustado.
         solicitante = buscar_solicitante(referencia) or {}
         telefone = _so_digitos(solicitante.get('telefone') or '')
 
-        aviso = ('✅ *Pedido APROVADO*' if decisao == 'APROVADO' else '❌ *Pedido REPROVADO*')
-        aviso += f"\n\n📅 {b['DATA_RETIRADA']}\n👥 Equipe {b['LIDER']}\n\n_Resposta de {quem_nome}_"
-
         if telefone:
+            ids_aviso = ids_desta or [int(referencia)]
+            aviso = _montar_aviso_whatsapp(ids_aviso, decisao, quem_nome, hora)
             ok, _ = zapi_enviar_texto(telefone, aviso)
             print(f'📤 Devolutiva ao solicitante: {"enviada" if ok else "falhou"}', flush=True)
         else:
@@ -1152,24 +1530,25 @@ def _avisar_decisao_do_dia(ids, decisao, quem_nome, equipe, data_iso):
     with _lock_solicitantes:
         mapa = dict(_ler_solicitantes())
 
-    # Um telefone só recebe um aviso, mesmo com vários lotes no dia.
+    # Um telefone só recebe UM aviso, mesmo com vários lotes no dia — e
+    # esse aviso soma os pedidos de TODOS os lotes daquela pessoa, não só
+    # do primeiro registro encontrado. Sem isso a mensagem detalhada
+    # (_montar_aviso_whatsapp) mostraria só parte do que foi decidido.
     por_telefone = {}
     for dados in mapa.values():
-        do_lote = [i for i in (dados.get('pedidos') or []) if int(i) in restantes]
+        do_lote = [int(i) for i in (dados.get('pedidos') or []) if int(i) in restantes]
         if not do_lote:
             continue
         telefone = _so_digitos(dados.get('telefone') or '')
         if telefone:
-            por_telefone.setdefault(telefone, dados)
+            por_telefone.setdefault(telefone, set()).update(do_lote)
         else:
             print(f'ℹ️ {dados.get("login", "solicitante")} sem telefone na IAM — '
                   f'devolutiva do relatório não enviada', flush=True)
 
-    data_br = '/'.join(reversed(str(data_iso).split('-')))
-    aviso = ('✅ *Pedido APROVADO*' if decisao == 'APROVADO' else '❌ *Pedido REPROVADO*')
-    aviso += (f'\n\n📅 {data_br}\n👥 Equipe {equipe}\n\n_Resposta de {quem_nome}_')
-
-    for telefone in por_telefone:
+    hora = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime('%d/%m às %H:%M')
+    for telefone, ids_pessoa in por_telefone.items():
+        aviso = _montar_aviso_whatsapp(sorted(ids_pessoa), decisao, quem_nome, hora)
         ok, _ = zapi_enviar_texto(telefone, aviso)
         print(f'📤 Devolutiva do relatório ({equipe}): '
               f'{"enviada" if ok else "falhou"}', flush=True)
@@ -1332,6 +1711,19 @@ def _tg_tratar_mensagem(msg):
     texto = (msg.get('text') or '').strip()
     chat = str((msg.get('chat') or {}).get('id') or '')
     nome = ((msg.get('from') or {}).get('first_name') or 'você')
+
+    # Resposta a um "editar valor" — ver _tg_tratar_callback (ramo
+    # 'editar:') e _tratar_resposta_edicao(). Sai por aqui, antes de tudo:
+    # essa resposta não começa com /start nem é uma palavra de comando, e
+    # sem checar isto primeiro ela caía no "if not texto.startswith
+    # ('/start'): return" logo abaixo e sumia sem processar nada.
+    resposta_a = (msg.get('reply_to_message') or {}).get('message_id')
+    if resposta_a and buscar_edicao(resposta_a):
+        try:
+            _tratar_resposta_edicao(msg, resposta_a)
+        except Exception as e:
+            print(f'❌ Resposta de edição de valor: {e}', flush=True)
+        return
 
     # Consulta de fechamento. Em grupo, o Telegram só entrega ao bot o que
     # começa com barra (modo privacidade, ligado por padrão) — por isso a
@@ -4137,12 +4529,12 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 # ✅ FECHAMENTO removido - será preenchido pela TRIGGER do SQL
                 query = """
                 INSERT INTO PEDIDOS (
-                    DATA_RETIRADA, DATA_ENVIO1, PROJETO, COORDENADOR, SUPERVISOR, 
+                    DATA_RETIRADA, DATA_ENVIO1, PROJETO, COORDENADOR, SUPERVISOR,
                     LIDER, NOME_LIDER, FAZENDA, TIPO_REFEICAO, CIDADE_PRESTACAO_DO_SERVICO,
-                    FORNECEDOR, VALOR_PAGO, COLABORADORES, TOTAL_COLABORADORES, A_CONTRATAR,
-                    RESPONSAVEL_PELO_CARTAO, PAGCORP, HOSPEDADO, NOME_DO_HOTEL, VALOR_DIARIA,
-                    TOTAL_PAGAR, APROVADO_POR, OBSERVACOES, AFERIU_TEMPERATURA
-                ) VALUES (%s, DATEADD(hour, -6, GETUTCDATE()), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    FORNECEDOR, VALOR_PAGO, VALOR_SOLICITADO, COLABORADORES, TOTAL_COLABORADORES,
+                    A_CONTRATAR, RESPONSAVEL_PELO_CARTAO, PAGCORP, HOSPEDADO, NOME_DO_HOTEL,
+                    VALOR_DIARIA, TOTAL_PAGAR, APROVADO_POR, OBSERVACOES, AFERIU_TEMPERATURA
+                ) VALUES (%s, DATEADD(hour, -6, GETUTCDATE()), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 
                 # Extrair TODOS os dados do pedido com MAPEAMENTO CORRETO
@@ -4248,7 +4640,12 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                 
                 resultado = executar_query(query, [
                     data_retirada, projeto, coordenador, supervisor, lider, nome_lider,
-                    fazenda, tipo_refeicao, cidade, fornecedor, valor_pago, 
+                    fazenda, tipo_refeicao, cidade, fornecedor,
+                    # VALOR_PAGO e VALOR_SOLICITADO nascem iguais: é o pedido
+                    # original, antes de qualquer ajuste do aprovador. Se a
+                    # Elaine editar depois, só VALOR_PAGO muda — este aqui
+                    # fica marcado pra sempre como "o que foi pedido".
+                    valor_pago, valor_pago,
                     colaboradores_nomes, total_colaboradores, a_contratar,
                     responsavel_cartao, pagcorp, hospedado, nome_hotel, valor_diaria,
                     total_pagar, aprovado_por, observacoes, aferiu_temperatura_frontend
