@@ -2008,8 +2008,20 @@ def conectar_azure_sql():
 # no meio de uma query (rede caiu, Azure fechou por ociosidade), ela é
 # descartada e a query tenta de novo com uma conexão nova — uma vez só, pra
 # não mascarar um erro real de SQL como se fosse de rede.
+#
+# POOL_MAX subiu de 8 para 24 em 10/09, no dia em que a produção travou de
+# novo com um pico de pedidos no fim do turno. Conferido na hora: o Azure
+# SQL respondia em 0,4s numa conexão direta (o banco não estava fora do
+# ar), sem nenhuma sessão bloqueando outra — mas havia 31 conexões
+# simultâneas de OUTRO sistema (driver "node-mssql", não este aqui) no
+# mesmo banco. O tier é Standard S2, que aguenta ~120 requisições
+# simultâneas no servidor inteiro — com 8 conexões nossas competindo por
+# essa cota junto de outro sistema pesado, um pico legítimo de pedidos
+# enfileirava atrás de só 8 vagas e cada thread ficava presa esperando.
+# 24 dá bastante mais paralelismo pro nosso lado, com folga generosa
+# abaixo do teto do S2.
 # ==========================================================================
-POOL_MAX = 8
+POOL_MAX = 24
 _pool_conexoes = queue.Queue(maxsize=POOL_MAX)
 _pool_criadas = 0
 _pool_lock = threading.Lock()
@@ -2033,10 +2045,15 @@ def _obter_conexao():
     # Pool cheio: espera alguém devolver em vez de abrir uma conexão a mais.
     # Com prazo — sem ele, um pico de acessos deixava a requisição travada
     # para sempre esperando conexão, sem erro e sem resposta.
+    #
+    # Prazo mais curto (era 20s) de propósito: um pico de verdade drena mais
+    # rápido com o pool maior; e se a espera não adiantar, é melhor a
+    # thread desistir logo e soltar a vaga no limite de threads do
+    # servidor do que ficar presa até o fim do prazo à toa.
     try:
-        return _pool_conexoes.get(timeout=20)
+        return _pool_conexoes.get(timeout=10)
     except queue.Empty:
-        print('⚠️ Pool de conexões esgotado por 20s', flush=True)
+        print('⚠️ Pool de conexões esgotado por 10s', flush=True)
         return None
 
 
