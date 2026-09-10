@@ -651,13 +651,15 @@ def _ids_do_lote(referencia, b):
 
 def _itens_do_lote(ids):
     """Linhas do banco para os ids de um lote — fonte única pro
-    detalhamento no WhatsApp, pro prompt de edição e pra própria edição."""
+    detalhamento no WhatsApp, pro prompt de edição, pro resumo pós-edição
+    no Telegram e pra própria edição."""
     if not ids:
         return []
     marcadores = ', '.join(['%s'] * len(ids))
     return executar_query(f"""
         SELECT ID, TIPO_REFEICAO, FORNECEDOR, VALOR_PAGO, VALOR_SOLICITADO,
-               TOTAL_COLABORADORES, TOTAL_PAGAR, PROJETO, LIDER, DATA_RETIRADA
+               TOTAL_COLABORADORES, TOTAL_PAGAR, PROJETO, LIDER, DATA_RETIRADA,
+               NOME_LIDER, PAGCORP, CIDADE_PRESTACAO_DO_SERVICO, OBSERVACOES
         FROM PEDIDOS WHERE ID IN ({marcadores}) ORDER BY ID
     """, ids) or []
 
@@ -746,6 +748,69 @@ def _montar_prompt_edicao(itens):
         linhas.append('Exemplo:')
         linhas.append('\n'.join(f"<code>{f} {v}</code>"
                                 for f, v in zip(familias, (12, 20, 22))))
+
+    return '\n'.join(linhas)
+
+
+def _montar_resumo_pos_edicao(itens, quem_nome, hora):
+    """Resumo completo do pedido, no MESMO formato da mensagem original de
+    aprovação — mas com destaque visual nos itens que foram ajustados.
+
+    Antes, depois de editar ela só recebia uma confirmação curta (2-3
+    linhas soltas). Isto devolve o pedido inteiro de novo — pra conferir
+    tudo junto, não só o que mudou — com o item ajustado visivelmente
+    diferente: valor pedido riscado, valor aprovado em negrito, e um ⚠️.
+    """
+    def esc(v):
+        return (str(v if v is not None else '—')
+                .replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
+
+    b = itens[0]
+    fechamento = '(FECHAMENTO)' in (b.get('OBSERVACOES') or '')
+    houve_ajuste = any(
+        abs(float(it['VALOR_SOLICITADO'] if it['VALOR_SOLICITADO'] is not None
+                  else it['VALOR_PAGO'] or 0) - float(it['VALOR_PAGO'] or 0)) >= 0.005
+        for it in itens)
+
+    titulo = ('🔶✏️ <b>PEDIDO APROVADO — VALOR AJUSTADO</b>' if houve_ajuste
+              else '✅ <b>PEDIDO APROVADO</b>')
+
+    linhas = [titulo, '',
+              f"👤 <b>Solicitante:</b> {esc(b.get('NOME_LIDER'))}",
+              f"🏢 <b>Projeto/Equipe:</b> {esc(b.get('PROJETO'))} / {esc(b.get('LIDER'))}"]
+    if not fechamento:
+        linhas.append(f"💳 <b>PAGCORP:</b> {esc(b.get('PAGCORP'))}")
+    linhas += [
+        f"📅 <b>Data:</b> {_data_br_segura(b['DATA_RETIRADA'])}",
+        f"📍 <b>Cidade:</b> {esc(b.get('CIDADE_PRESTACAO_DO_SERVICO'))}",
+        '', '🍴 <b>Refeições</b>',
+    ]
+
+    total = 0.0
+    for it in itens:
+        valor = float(it['VALOR_PAGO'] or 0)
+        solicitado = float(it['VALOR_SOLICITADO'] if it['VALOR_SOLICITADO'] is not None else valor)
+        qtd = int(it['TOTAL_COLABORADORES'] or 0)
+        subtotal = float(it['TOTAL_PAGAR'] if it['TOTAL_PAGAR'] is not None else valor * qtd)
+        total += subtotal
+        ajustado = abs(solicitado - valor) >= 0.005
+
+        forn = it.get('FORNECEDOR') or ''
+        linhas.append(f"  • {esc(it['TIPO_REFEICAO'])}" + (f" — {esc(forn)}" if forn else ''))
+        if ajustado:
+            linhas.append(f"     {qtd} × <s>R$ {consulta_fechamento.moeda(solicitado)}</s> "
+                          f"→ <b>R$ {consulta_fechamento.moeda(valor)}</b> "
+                          f"= <b>R$ {consulta_fechamento.moeda(subtotal)}</b>  ⚠️")
+        else:
+            linhas.append(f"     {qtd} × R$ {consulta_fechamento.moeda(valor)} "
+                          f"= <b>R$ {consulta_fechamento.moeda(subtotal)}</b>")
+
+    linhas += ['', f"💰 <b>Total aprovado:</b> R$ {consulta_fechamento.moeda(total)}"]
+
+    quem_seguro = esc(quem_nome)
+    rodape = (f"✏️ <i>Ajustado e aprovado por {quem_seguro} · {hora}</i>" if houve_ajuste
+              else f"<i>Aprovado por {quem_seguro} · {hora}</i>")
+    linhas += ['', rodape]
 
     return '\n'.join(linhas)
 
@@ -894,11 +959,12 @@ def _tratar_resposta_edicao(msg, prompt_id):
                 text=f'<s>{seguro}</s>\n\n{marca} por {quem_seguro} · {hora}',
                 parse_mode='HTML')
 
-    if resumo:
-        partes = [f"• {tipo}: R$ {consulta_fechamento.moeda(antes)} → "
-                  f"R$ {consulta_fechamento.moeda(depois)}"
-                  for tipo, antes, depois in resumo]
-        telegram_enviar(chat, '✅ <b>Ajustado e aprovado</b>\n\n' + '\n'.join(partes))
+    # Resumo completo do pedido de novo — não só o que mudou, o pedido
+    # inteiro — com o item ajustado destacado. Busca de novo no banco
+    # porque _aplicar_edicao já gravou: estas são as linhas FINAIS.
+    itens_finais = _itens_do_lote(ids)
+    if itens_finais:
+        telegram_enviar(chat, _montar_resumo_pos_edicao(itens_finais, quem_nome, hora))
     else:
         telegram_enviar(chat, '✅ Aprovado.')
 
