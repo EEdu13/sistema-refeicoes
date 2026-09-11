@@ -2367,11 +2367,17 @@ def foto_nossa(nome):
     if url:
         return url
 
-    # Nome parcial: aceita só quando não há dúvida. Dois "Marcos Silva"
-    # diferentes tem que cair no fallback, porque mostrar a cara errada é
-    # pior do que mostrar as iniciais.
+    # Nome parcial: só serve pro CHUTE do login (dois nomes só, sem meio —
+    # "Helieder Souza" pra achar "HELIEDER RODRIGUES DE SOUZA"). Com nome
+    # COMPLETO (3+ palavras) já sabemos o nome do meio, e ele é informação
+    # de verdade: ignorá-lo pra casar só por primeiro+último already deu
+    # errado — "LUCAS BRISOLA DOS SANTOS" (sem foto) casou com "LUCAS
+    # BENDEL DOS SANTOS" (com foto) só por terminarem os dois em SANTOS,
+    # mesmo sem ambiguidade nenhuma no cadastro: a foto do Bendel apareceu
+    # pro Brisola. Com nome completo, ou bate exato ou cai no fallback do
+    # PCP — nunca adivinha.
     partes = chave.split()
-    if len(partes) >= 2:
+    if len(partes) == 2:
         candidatos = extremos.get((partes[0], partes[-1])) or []
         urls = {mapa[c] for c in candidatos}
         if len(urls) == 1:
