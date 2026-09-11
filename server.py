@@ -2197,8 +2197,15 @@ def resolver_equipes_do_usuario(usuario):
             ) or []):
                 registrar(l, 'PROJETO')
 
-        elif tipo in ('COORDENADOR', 'SUPERVISOR'):
-            # LTRIM/RTRIM porque o cadastro tem espaço sobrando com frequência
+        elif tipo in ('COORDENADOR', 'SUPERVISOR', 'LIDER'):
+            # LIDER entrou depois dos outros dois: um líder de equipe (ex.
+            # Lucas Brisola, em 820AG e 801AB) não aparece nunca nas
+            # colunas COORDENADOR/SUPERVISOR — só na LIDER. Sem este tipo,
+            # um escopo "Líder" cadastrado no IAM era ignorado em silêncio
+            # e a pessoa ficava sem equipe nenhuma, mesmo liderando uma.
+            #
+            # LTRIM/RTRIM porque o cadastro tem espaço sobrando com frequência.
+            # tipo bate literalmente com o nome da coluna nos três casos.
             for l in (executar_query(
                 f"SELECT EQUIPE, PROJETO, LIDER FROM ORGANOGRAMA "
                 f"WHERE LTRIM(RTRIM(UPPER({tipo}))) = %s ORDER BY PROJETO, EQUIPE",
