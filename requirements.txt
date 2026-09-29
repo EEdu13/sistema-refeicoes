@@ -5,3 +5,4 @@ Flask-CORS
 pytz
 python-dotenv
 reportlab==4.4.3
+Pillow

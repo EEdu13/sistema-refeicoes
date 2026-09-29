@@ -5,6 +5,7 @@ import socket
 import json
 import urllib.parse
 import base64
+import io
 import hmac
 import re
 import threading
@@ -2695,6 +2696,76 @@ def upload_imagem_blob(imagem_base64, nome_arquivo, tentativas=MAX_TENTATIVAS_BL
 
 
 # --------------------------------------------------------------------------
+# FOTO REPETIDA NA AFERIÇÃO
+#
+# Tinha gente mandando a mesma foto na retirada e no consumo, e reaproveitando
+# a foto de um dia em outro (até entre equipes). Cada foto ganha uma impressão
+# digital perceptual (dHash 16x16 = 256 bits): recompressão, redimensionar ou
+# mexer no brilho mudam poucos bits; outra foto da mesma cena muda muitos.
+#
+# Medido em setembro/2026 (300 fotos): a mesma foto reenviada dá 0–4. Fotos
+# novas no MESMO lugar, com o visor marcando outra temperatura, já dão 8
+# (a 700AP fotografa sempre no mesmo canto do carro) — por isso o corte é 4.
+# --------------------------------------------------------------------------
+
+LIMITE_FOTO_REPETIDA = 4
+DIAS_BUSCA_FOTO_REPETIDA = 60
+
+
+def impressao_foto(imagem):
+    """bytes ou base64 -> dHash em hex (64 chars). None se não der para ler."""
+    try:
+        from PIL import Image
+        if isinstance(imagem, str):
+            imagem = _decodificar_imagem(imagem)
+        cinza = Image.open(io.BytesIO(imagem)).convert('L').resize((17, 16), Image.LANCZOS)
+        px = list(cinza.getdata())
+        bits = 0
+        for y in range(16):
+            for x in range(16):
+                bits = (bits << 1) | (1 if px[y * 17 + x] > px[y * 17 + x + 1] else 0)
+        return f'{bits:064x}'
+    except Exception as e:
+        print(f'⚠️ Impressão da foto falhou: {e}', flush=True)
+        return None
+
+
+def distancia_fotos(a, b):
+    return bin(int(a, 16) ^ int(b, 16)).count('1')
+
+
+def procurar_foto_repetida(pedido_id, hash_ret, hash_con):
+    """
+    Devolve (fase, motivo) da primeira foto repetida, ou None se estiver tudo ok.
+    Compara retirada x consumo e as duas contra as fotos dos outros pedidos
+    recentes, de qualquer equipe.
+    """
+    if hash_ret and hash_con and distancia_fotos(hash_ret, hash_con) <= LIMITE_FOTO_REPETIDA:
+        return 'consumo', 'A foto do consumo é a mesma da retirada.'
+
+    novas = [(f, h) for f, h in (('retirada', hash_ret), ('consumo', hash_con)) if h]
+    if not novas:
+        return None
+
+    antigas = executar_query(f"""
+        SELECT ID, LIDER, DATA_RETIRADA, HASH_RETIRADA, HASH_CONSUMO FROM PEDIDOS
+        WHERE ID <> %s
+          AND DATA_RETIRADA >= DATEADD(day, -{DIAS_BUSCA_FOTO_REPETIDA}, GETDATE())
+          AND (HASH_RETIRADA IS NOT NULL OR HASH_CONSUMO IS NOT NULL)
+    """, [pedido_id]) or []
+
+    for fase, h in novas:
+        for p in antigas:
+            for antiga in (p.get('HASH_RETIRADA'), p.get('HASH_CONSUMO')):
+                if antiga and distancia_fotos(h, antiga) <= LIMITE_FOTO_REPETIDA:
+                    print(f'🚫 Pedido {pedido_id}: foto de {fase} repete a do pedido '
+                          f'{p["ID"]} ({p.get("LIDER")})', flush=True)
+                    return fase, (f'A foto da {fase} já foi usada em outro pedido '
+                                  f'({_data_br_segura(p.get("DATA_RETIRADA"))}).')
+    return None
+
+
+# --------------------------------------------------------------------------
 # FILA EM DISCO
 #
 # O que não subiu fica gravado e é reenviado sozinho. Não é eterno (no Railway
@@ -4876,6 +4947,21 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
                     return
 
+                # 📷 Foto repetida é recusada ANTES de gravar qualquer coisa:
+                # o pedido continua pendente e a pessoa tira outra.
+                hash_retirada = impressao_foto(img_retirada_base64) if img_retirada_base64 else None
+                hash_consumo = impressao_foto(img_consumo_base64) if img_consumo_base64 else None
+                repetida = procurar_foto_repetida(pedido_id, hash_retirada, hash_consumo)
+                if repetida:
+                    fase_rep, motivo = repetida
+                    response = {
+                        "error": True,
+                        "foto_repetida": True,
+                        "fase": fase_rep,
+                        "message": f"{motivo} Tire uma foto nova do termômetro na hora da {fase_rep}.",
+                    }
+                    self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+                    return
 
                 # As colunas de temperatura já existem há muito tempo — checar
                 # isso a cada aferição custava mais uma consulta por nada.
@@ -4887,7 +4973,9 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     TEMPERATURA_CONSUMO = %s,
                     HORA_RETIRADA = %s,
                     HORA_CONSUMO = %s,
-                    OBSERVACOES_TEMP = %s
+                    OBSERVACOES_TEMP = %s,
+                    HASH_RETIRADA = ISNULL(%s, HASH_RETIRADA),
+                    HASH_CONSUMO = ISNULL(%s, HASH_CONSUMO)
                 WHERE ID = %s
                 """
                 
@@ -4928,6 +5016,8 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                     hora_retirada_dt,
                     hora_consumo_dt,
                     observacoes,
+                    hash_retirada,
+                    hash_consumo,
                     pedido_id
                 ])
                 

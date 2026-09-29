@@ -6278,6 +6278,7 @@
             // Limpar variáveis globais de imagem
             globalImageRetirada = null;
             globalImageConsumo = null;
+            impressoesFoto.retirada = impressoesFoto.consumo = null;
             imageTimestamps = {
                 retirada: null,
                 consumo: null
@@ -6489,7 +6490,21 @@
                     
                     const result = await response.json();
                     console.log('📥 Resposta da API:', JSON.stringify(result, null, 2));
-                    
+
+                    // Foto repetida não é falta de sinal: guardar na fila só
+                    // faria o servidor recusar de novo, para sempre
+                    if (result.error && result.foto_repetida) {
+                        if (loadingOverlay) loadingOverlay.style.display = 'none';
+                        limparFotoFase(result.fase);
+                        mostrarResultado({
+                            tipo: 'erro',
+                            titulo: 'Foto repetida',
+                            texto: result.message,
+                            botao: 'Entendi'
+                        });
+                        return;
+                    }
+
                     if (result.error) {
                         throw new Error(result.message);
                     }
@@ -6678,6 +6693,38 @@
             });
         }
 
+        // Impressão digital perceptual (dHash 16x16), igual à do servidor.
+        // Recompressão muda poucos bits; outra foto da mesma cena muda muitos.
+        const LIMITE_FOTO_REPETIDA = 4;
+        const impressoesFoto = { retirada: null, consumo: null };
+
+        function impressaoFoto(canvas) {
+            const mini = document.createElement('canvas');
+            mini.width = 17; mini.height = 16;
+            const ctx = mini.getContext('2d');
+            ctx.drawImage(canvas, 0, 0, 17, 16);
+            const px = ctx.getImageData(0, 0, 17, 16).data;
+            const cinza = (i) => px[i * 4] * 0.299 + px[i * 4 + 1] * 0.587 + px[i * 4 + 2] * 0.114;
+            const bits = [];
+            for (let y = 0; y < 16; y++)
+                for (let x = 0; x < 16; x++)
+                    bits.push(cinza(y * 17 + x) > cinza(y * 17 + x + 1) ? 1 : 0);
+            return bits;
+        }
+
+        function distanciaImpressao(a, b) {
+            let d = 0;
+            for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) d++;
+            return d;
+        }
+
+        function limparFotoFase(fase) {
+            const ehRetirada = fase === 'retirada';
+            document.getElementById(ehRetirada ? 'fileRetirada' : 'fileConsumo').value = '';
+            document.getElementById(ehRetirada ? 'fileRetiradaCamera' : 'fileConsumoCamera').value = '';
+            processarFotoAfericao(fase, null);
+        }
+
         /**
          * Processa a foto de uma fase (retirada/consumo).
          * Devolve o dataURL reduzido e pinta a prévia.
@@ -6699,6 +6746,7 @@
 
                 if (ehRetirada) { globalImageRetirada = null; imageTimestamps.retirada = null; }
                 else { globalImageConsumo = null; imageTimestamps.consumo = null; }
+                impressoesFoto[fase] = null;
 
                 atualizarProgressoFases();
                 return;
@@ -6728,6 +6776,23 @@
 
                 const dataUrl = canvas.toDataURL('image/jpeg', FOTO_QUALIDADE);
 
+                // A mesma foto na retirada e no consumo não vale: recusa já
+                // aqui, antes de a pessoa preencher o resto
+                const impressao = impressaoFoto(canvas);
+                const outra = impressoesFoto[ehRetirada ? 'consumo' : 'retirada'];
+                if (outra && distanciaImpressao(impressao, outra) <= LIMITE_FOTO_REPETIDA) {
+                    limparFotoFase(fase);
+                    mostrarResultado({
+                        tipo: 'erro',
+                        titulo: 'Foto repetida',
+                        texto: 'Essa é a mesma foto da ' + (ehRetirada ? 'consumo' : 'retirada')
+                            + '. Tire uma foto nova do termômetro na hora da ' + fase + '.',
+                        botao: 'Entendi'
+                    });
+                    return;
+                }
+                impressoesFoto[fase] = impressao;
+
                 if (ehRetirada) { globalImageRetirada = dataUrl; imageTimestamps.retirada = Date.now(); }
                 else { globalImageConsumo = dataUrl; imageTimestamps.consumo = Date.now(); }
 
@@ -6754,9 +6819,7 @@
                 trocar.textContent = 'Remover';
                 trocar.onclick = (ev) => {
                     ev.stopPropagation();
-                    document.getElementById(ehRetirada ? 'fileRetirada' : 'fileConsumo').value = '';
-                    document.getElementById(ehRetirada ? 'fileRetiradaCamera' : 'fileConsumoCamera').value = '';
-                    processarFotoAfericao(fase, null);
+                    limparFotoFase(fase);
                 };
 
                 preview.append(titulo, detalhe, canvas, trocar);
@@ -7739,7 +7802,8 @@
             
             let successCount = 0;
             let errorCount = 0;
-            
+            const recusadas = [];
+
             for (let i = 0; i < filaTemperatura.length; i++) {
                 const aferição = filaTemperatura[i];
                 
@@ -7755,8 +7819,14 @@
                     });
                     
                     const result = await response.json();
-                    
-                    if (result.error) {
+
+                    if (result.error && result.foto_repetida) {
+                        // Recusa definitiva: sai da fila e o pedido volta para
+                        // as pendências, onde a pessoa refaz com foto nova
+                        console.warn(`🚫 Aferição do pedido ${aferição.pedido_id} recusada: ${result.message}`);
+                        recusadas.push(aferição);
+                        SESSION.toast(`Pedido ${aferição.pedido_id}: ${result.message}`, 'erro', 8000);
+                    } else if (result.error) {
                         console.error(`❌ Erro ao enviar aferição da fila:`, result.message);
                         errorCount++;
                     } else {
@@ -7781,6 +7851,11 @@
                     loadPendingTemperatures();
                 }, 2000); // Aguardar 2 segundos
             } else {
+                // As recusadas saem mesmo com erro nas outras: reenviar não muda nada
+                if (recusadas.length) {
+                    localStorage.setItem('temperaturaQueue',
+                        JSON.stringify(filaTemperatura.filter(a => !recusadas.includes(a))));
+                }
                 // Se houver erros, apenas atualizar interface para manter indicadores
                 updatePendingTemperaturesList();
             }
