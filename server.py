@@ -2736,16 +2736,20 @@ def distancia_fotos(a, b):
 
 def procurar_foto_repetida(pedido_id, hash_ret, hash_con):
     """
-    Devolve (fase, motivo) da primeira foto repetida, ou None se estiver tudo ok.
-    Compara retirada x consumo e as duas contra as fotos dos outros pedidos
-    recentes, de qualquer equipe.
+    Devolve (fase, motivo) se a foto do consumo não for exclusiva, ou None.
+
+    A retirada pode repetir (equipes que retiram juntas mandam a mesma foto);
+    o consumo não: não pode ser a da retirada nem nenhuma foto de outro pedido
+    recente, de qualquer equipe. hash_ret continua sendo gravado para que uma
+    retirada antiga também não sirva de consumo depois.
     """
-    if hash_ret and hash_con and distancia_fotos(hash_ret, hash_con) <= LIMITE_FOTO_REPETIDA:
+    if not hash_con:
+        return None
+
+    if hash_ret and distancia_fotos(hash_ret, hash_con) <= LIMITE_FOTO_REPETIDA:
         return 'consumo', 'A foto do consumo é a mesma da retirada.'
 
-    novas = [(f, h) for f, h in (('retirada', hash_ret), ('consumo', hash_con)) if h]
-    if not novas:
-        return None
+    novas = [('consumo', hash_con)]
 
     antigas = executar_query(f"""
         SELECT ID, LIDER, DATA_RETIRADA, HASH_RETIRADA, HASH_CONSUMO FROM PEDIDOS
@@ -2760,7 +2764,7 @@ def procurar_foto_repetida(pedido_id, hash_ret, hash_con):
                 if antiga and distancia_fotos(h, antiga) <= LIMITE_FOTO_REPETIDA:
                     print(f'🚫 Pedido {pedido_id}: foto de {fase} repete a do pedido '
                           f'{p["ID"]} ({p.get("LIDER")})', flush=True)
-                    return fase, (f'A foto da {fase} já foi usada em outro pedido '
+                    return fase, (f'A foto do consumo já foi usada em outro pedido '
                                   f'({_data_br_segura(p.get("DATA_RETIRADA"))}).')
     return None
 
@@ -4958,7 +4962,7 @@ class RefeicaoHandler(http.server.BaseHTTPRequestHandler):
                         "error": True,
                         "foto_repetida": True,
                         "fase": fase_rep,
-                        "message": f"{motivo} Tire uma foto nova do termômetro na hora da {fase_rep}.",
+                        "message": f"{motivo} Tire uma foto nova do termômetro na hora do consumo.",
                     }
                     self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
                     return
